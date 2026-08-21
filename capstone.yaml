@@ -1,22 +1,25 @@
 name: flyrank-capstone-image-relevance
 title: Image Relevance & Auto-Tagging
 subtitle: AI Image Understanding & Content Matching Engine
-phase: design
-implementation_status: not_started
+phase: walking_skeleton
+implementation_status: phase_2_complete
 
-# These are planned Phase 2+ commands. They are intentionally marked TODO and
-# must not be treated as executable until the implementation exists and each
-# command has been verified on a clean checkout.
-run: "TODO_PHASE_2: docker compose up --build"
+# `run` and `test` were verified in Phase 2. Seeding remains planned and must
+# not be treated as executable until the corpus workflow exists.
+run: "docker compose up --build -d"
 seed: "TODO_PHASE_2_PLUS: docker compose exec api python -m scripts.seed"
-test: "TODO_PHASE_2_PLUS: docker compose exec api pytest"
+test: "docker compose exec -T api pytest"
 base_url: http://localhost:8000
 
 evaluator_endpoints:
   health:
     method: GET
     path: /health
-    status: planned
+    status: available
+  readiness:
+    method: GET
+    path: /ready
+    status: available
   process_images:
     method: POST
     path: /images/process
@@ -53,4 +56,3 @@ evaluator_endpoints:
     method: GET
     path: /metrics/ai-usage
     status: planned
-

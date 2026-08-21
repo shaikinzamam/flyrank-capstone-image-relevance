@@ -6,7 +6,7 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently in **Phase 1: design**. No application runtime or evaluation result exists yet.
+The project is currently at the **Phase 2 walking skeleton**. The FastAPI runtime, PostgreSQL connection, Alembic infrastructure, pgvector extension, and health/readiness endpoints exist. No domain feature or evaluation result exists yet.
 
 ## Problem
 
@@ -45,23 +45,32 @@ Three.js and React Three Fiber are intentionally excluded.
 
 ## Current status
 
-- Phase 1 design artifacts: in progress
-- Backend implementation: not started
+- Phase 1 design artifacts: complete
+- Phase 2 backend walking skeleton: complete
+- FastAPI `/health` and database-backed `/ready`: verified
+- PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
+- Domain models and application features: not started
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
 
 ## Planned setup
 
-The intended clean-machine workflow will be:
+The current walking skeleton can be started from the repository root with:
 
-1. Copy `.env.example` to `.env` and provide local secrets.
-2. Start PostgreSQL, the API, and the worker with Docker Compose.
-3. Apply Alembic migrations.
-4. Seed the licensed image corpus and evaluation fixtures.
-5. Run the automated tests and evaluation command.
+```powershell
+docker compose up --build -d
+```
 
-Exact commands are TODO because the implementation does not exist in Phase 1. They will be made executable and verified before being presented as working instructions.
+The API entrypoint applies Alembic migrations before starting Uvicorn. Verify it with:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/ready
+docker compose exec -T api pytest
+```
+
+Expected walking-skeleton responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding and evaluation commands remain TODO because those features are outside Phase 2.
 
 ## Evaluation
 
@@ -87,4 +96,3 @@ The demo will also show batch progress, structured metadata, explanations, a hum
 - Thresholds must be tuned against labeled data before they can be considered reliable.
 - Local filesystem image storage is suitable for the capstone but not a distributed production deployment.
 - The premium frontend is presentation polish, not part of the backend correctness core.
-

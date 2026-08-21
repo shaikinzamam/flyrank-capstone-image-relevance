@@ -2,6 +2,16 @@
 
 Every item starts as **Pending**. Evidence will be added only after the corresponding command, test, request, log, or evaluation has actually been produced.
 
+## Phase 2 walking-skeleton verification
+
+These checks establish infrastructure only and do not complete the feature-level Definition of Done below.
+
+- `GET /health` returned `{"status":"ok"}` from the Docker API.
+- `GET /ready` returned `{"status":"ready","database":"reachable"}` after a real `SELECT 1`.
+- Docker reported both `db` and `api` as healthy.
+- PostgreSQL reported pgvector `0.8.6` and Alembic revision `0001`.
+- `pytest` under containerized Python 3.12.14: `3 passed in 0.09s`.
+
 ## AI processing
 
 - [ ] **Pending — Structured output:** The vision model produces structured output validated against a schema; invalid responses are never trusted.
@@ -50,4 +60,3 @@ Every item starts as **Pending**. Evidence will be added only after the correspo
 - [ ] **Pending — Probe 4:** A post without a suitable image returns `No confident match` and reasons.
 - [ ] **Pending — Probe 5:** The evaluation command reports top-1 precision matching the README.
 - [ ] **Pending — Probe 6:** Every vision and embedding call has a corresponding cost-log entry.
-
