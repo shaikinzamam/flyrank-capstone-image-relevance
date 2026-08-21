@@ -1,0 +1,56 @@
+name: flyrank-capstone-image-relevance
+title: Image Relevance & Auto-Tagging
+subtitle: AI Image Understanding & Content Matching Engine
+phase: design
+implementation_status: not_started
+
+# These are planned Phase 2+ commands. They are intentionally marked TODO and
+# must not be treated as executable until the implementation exists and each
+# command has been verified on a clean checkout.
+run: "TODO_PHASE_2: docker compose up --build"
+seed: "TODO_PHASE_2_PLUS: docker compose exec api python -m scripts.seed"
+test: "TODO_PHASE_2_PLUS: docker compose exec api pytest"
+base_url: http://localhost:8000
+
+evaluator_endpoints:
+  health:
+    method: GET
+    path: /health
+    status: planned
+  process_images:
+    method: POST
+    path: /images/process
+    status: planned
+  job_status:
+    method: GET
+    path: /jobs/{job_id}
+    status: planned
+  post_recommendations:
+    method: GET
+    path: /posts/{post_id}/image-recommendations
+    status: planned
+  recommendation_detail:
+    method: GET
+    path: /recommendations/{recommendation_id}
+    status: planned
+  approve_recommendation:
+    method: POST
+    path: /recommendations/{recommendation_id}/approve
+    status: planned
+  reject_recommendation:
+    method: POST
+    path: /recommendations/{recommendation_id}/reject
+    status: planned
+  run_evaluation:
+    method: POST
+    path: /evaluation/run
+    status: planned
+  latest_evaluation:
+    method: GET
+    path: /evaluation/latest
+    status: planned
+  ai_usage:
+    method: GET
+    path: /metrics/ai-usage
+    status: planned
+

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "status": "structure_only_not_collected",
+  "target_image_count_approximate": 50,
+  "license_policy": "Only licensed-free sources with source and license metadata may be added. Verify the applicable source license before download or redistribution.",
+  "planned_subjects": [
+    "red_fox",
+    "wolf",
+    "dog",
+    "bear",
+    "deer"
+  ],
+  "record_schema": {
+    "image_id": "Stable project-local identifier, for example fox_001",
+    "source_url": "Canonical page or image source URL",
+    "source_provider": "Source name, for example Unsplash or Pexels",
+    "creator_name": "Credited creator when supplied by the source",
+    "license_name": "Verified license or source usage terms",
+    "license_url": "URL to the verified license or terms",
+    "downloaded_at": "ISO-8601 timestamp recorded by the future download process",
+    "expected_subject": "Human-readable labeled subject",
+    "subject_code": "Normalized taxonomy identifier",
+    "category": "Broad category such as animal",
+    "local_filename": "Reproducible local corpus filename",
+    "sha256": "Content hash populated after download",
+    "notes": "Optional labeling or provenance notes"
+  },
+  "images": []
+}
+
