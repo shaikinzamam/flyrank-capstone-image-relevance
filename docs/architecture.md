@@ -89,6 +89,16 @@ worker -> semantic representation -> local embedding -> pgvector
 worker -> progress + per-call logs -> complete or visible failure
 ```
 
+Phase 4 implements only the synchronous single-image subset:
+
+```text
+POST /images/{id}/analyze -> stored-file validation -> VisionProvider
+  -> strict Pydantic validation -> confidence flag -> one metadata row
+```
+
+The durable worker flow above remains the Phase 5 target and is not satisfied by
+the synchronous endpoint.
+
 ### Article matching
 
 ```text
@@ -112,4 +122,3 @@ no accepted candidates
 ## Planned deployment boundary
 
 Docker Compose will eventually start PostgreSQL, the FastAPI process, and a separate worker process. The frontend will be added only after the backend probes pass. Redis, Celery, Three.js, and React Three Fiber are not planned.
-

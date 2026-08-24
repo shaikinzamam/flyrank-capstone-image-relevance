@@ -35,6 +35,10 @@ class ImageTooLargeError(ImageStorageError):
     pass
 
 
+class InvalidStoredImageError(ImageStorageError):
+    pass
+
+
 @dataclass(frozen=True)
 class StagedUpload:
     path: Path
@@ -147,3 +151,30 @@ class LocalImageStorage:
         if not path.is_relative_to(self.root):
             raise ValueError("Storage key resolves outside the image storage root")
         path.unlink(missing_ok=True)
+
+    def get_validated_path(
+        self,
+        storage_key: str,
+        *,
+        expected_mime_type: str,
+        expected_sha256: str,
+    ) -> Path:
+        path = (self.root / Path(storage_key)).resolve()
+        if not path.is_relative_to(self.root) or not path.is_file():
+            raise InvalidStoredImageError("Stored image is missing or inaccessible")
+        byte_size = path.stat().st_size
+        if byte_size <= 0 or byte_size > self.max_upload_bytes:
+            raise InvalidStoredImageError("Stored image no longer passes validation")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != expected_sha256:
+            raise InvalidStoredImageError("Stored image integrity check failed")
+        try:
+            self.validate(
+                StagedUpload(path=path, byte_size=byte_size, sha256=digest),
+                expected_mime_type,
+            )
+        except ImageStorageError as exc:
+            raise InvalidStoredImageError(
+                "Stored image no longer passes validation"
+            ) from exc
+        return path

@@ -25,10 +25,10 @@ These checks establish infrastructure only and do not complete the feature-level
 
 ## AI processing
 
-- [ ] **Pending — Structured output:** The vision model produces structured output validated against a schema; invalid responses are never trusted.
-- [ ] **Pending — Confidence policy:** Low-confidence classifications are flagged instead of accepted.
+- [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
+- [x] **Phase 4 evidence — Confidence policy:** The configurable provisional threshold flags low-confidence metadata in both `is_low_confidence` and `metadata_status`, and the API exposes both fields.
 - [ ] **Pending — Background processing:** Images are processed through a batch background job with retries.
-- [ ] **Pending — Cost accounting:** Vision and embedding costs are tracked for every call.
+- [ ] **Pending — Full cost accounting:** Phase 4 durably logs each vision attempt, including unknown cost as null; embedding accounting and budget enforcement remain unimplemented.
 
 ## Matching system
 
@@ -54,7 +54,7 @@ These checks establish infrastructure only and do not complete the feature-level
 
 ## Quality and documentation
 
-- [ ] **Pending — Schema tests:** Automated tests cover valid and invalid model output.
+- [x] **Phase 4 evidence — Schema tests:** The deterministic suite covers valid metadata, malformed output, required fields, confidence bounds, blank/empty tags, collection normalization, taxonomy rejection, low-confidence flags, persistence, state transitions, provider timeout/failure, missing images, idempotent reuse, and explicit replacement.
 - [ ] **Pending — Mismatch tests:** Automated tests cover the forced fox-versus-wolf rejection.
 - [ ] **Pending — Matching tests:** Automated tests cover matching accuracy and equivalent concepts.
 - [ ] **Pending — Resilience tests:** Tests cover dependency failure and duplicate job delivery.

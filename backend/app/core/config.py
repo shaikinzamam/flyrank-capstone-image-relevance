@@ -36,6 +36,22 @@ class Settings(BaseSettings):
         default=40_000_000,
         validation_alias="MAX_IMAGE_PIXELS",
     )
+    vision_provider: str = Field(default="gemini", validation_alias="VISION_PROVIDER")
+    gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
+    gemini_vision_model: str = Field(
+        default="gemini-2.5-flash",
+        validation_alias="GEMINI_VISION_MODEL",
+    )
+    vision_timeout_seconds: PositiveInt = Field(
+        default=30,
+        validation_alias="VISION_TIMEOUT_SECONDS",
+    )
+    vision_low_confidence_threshold: float = Field(
+        default=0.70,
+        ge=0,
+        le=1,
+        validation_alias="VISION_LOW_CONFIDENCE_THRESHOLD",
+    )
 
 
 @lru_cache

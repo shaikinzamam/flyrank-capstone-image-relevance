@@ -2,8 +2,16 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
-from app.api.dependencies import ImageAssetsService
+from app.api.dependencies import ImageAnalysis, ImageAssetsService
 from app.schemas.image_asset import ImageAssetResponse
+from app.schemas.image_metadata import AnalyzeImageResponse, ImageMetadataResponse
+from app.services.image_analysis import (
+    ImageStateError,
+    MalformedProviderResponseError,
+    MetadataValidationError,
+    VisionProviderFailureError,
+    VisionProviderTimeoutError,
+)
 from app.services.image_assets import (
     DuplicateImageError,
     ImageNotFoundError,
@@ -72,3 +80,44 @@ def get_image(image_id: UUID, service: ImageAssetsService) -> ImageAssetResponse
             detail=str(exc),
         ) from exc
     return ImageAssetResponse.model_validate(asset)
+
+
+@router.post("/{image_id}/analyze", response_model=AnalyzeImageResponse)
+def analyze_image(
+    image_id: UUID,
+    service: ImageAnalysis,
+    reprocess: bool = Query(default=False),
+) -> AnalyzeImageResponse:
+    try:
+        metadata, reused = service.analyze(image_id, reprocess=reprocess)
+    except ImageNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ImageStateError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except VisionProviderTimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc),
+        ) from exc
+    except VisionProviderFailureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except (MalformedProviderResponseError, MetadataValidationError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    return AnalyzeImageResponse(
+        image_id=image_id,
+        processing_status="processed",
+        reused=reused,
+        metadata=ImageMetadataResponse.model_validate(metadata),
+    )

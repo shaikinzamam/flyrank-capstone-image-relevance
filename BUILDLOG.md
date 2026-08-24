@@ -97,3 +97,40 @@ This log records how AI assistance was used, which design choices were made, and
 ### Still not done
 
 - No authentication, Gemini integration, vision metadata, embeddings, background worker, matching, mismatch guard, recommendations, evaluation, or frontend feature exists.
+
+## 2026-08-24 - Phase 4 vision auto-tagging
+
+### AI assistance
+
+- Used Codex to implement the strict metadata contract, compact taxonomy, Gemini-backed `VisionProvider`, deterministic fake provider, synchronous analysis service, persistence migration, endpoint, and tests.
+- Used Codex to verify the current Google Gen AI SDK image-input, JSON-schema, timeout, and retry configuration against official SDK documentation.
+
+### Decisions
+
+- Keep Gemini SDK calls entirely inside `GeminiVisionProvider`; the service accepts only the provider interface and treats every returned value as untrusted.
+- Use the documented compact subject taxonomy (`red_fox`, `gray_wolf`, `domestic_dog`, `brown_bear`, and `white_tailed_deer`) and require the human subject and broad category to match the selected taxonomy code.
+- Normalize taxonomy strings and collection values to lowercase, trim whitespace, and deduplicate collections while preserving order. Reject extra fields, blank captions/tags, unknown taxonomy values, invalid types, and out-of-range confidence.
+- Store exactly one metadata row per image. Ordinary analyze calls reuse it without a provider call; `reprocess=true` updates the same row only after the replacement validates.
+- Use a configurable provisional low-confidence threshold (`VISION_LOW_CONFIDENCE_THRESHOLD`, default `0.70`). Low-confidence results complete processing but are explicitly stored and returned as `flagged`.
+- Keep the endpoint synchronous for Phase 4. SDK retries are disabled (`attempts=1`), call logs record retry count zero, and durable background execution/retries remain Phase 5 work.
+- Persist every attempted provider call with provider, model, operation, outcome, latency, retry count, optional cost, error code, and timestamp. Unknown provider cost remains null rather than being guessed.
+- Preserve the last valid metadata if explicit reprocessing fails. First-time failures set the image to `failed`; failed replacement attempts restore `processed` because valid prior metadata still exists.
+
+### Verification performed
+
+- Local full suite on Python 3.13.1: `29 passed in 5.22s` on the final run.
+- Container full suite on Python 3.12.14: `29 passed in 1.93s` on the final rebuild.
+- PostgreSQL applied Alembic revision `0003`; `alembic check` reported no new upgrade operations.
+- Docker reported healthy PostgreSQL and API services; live `/health` and `/ready` returned successful JSON.
+- Deterministic endpoint tests exercised accepted, flagged, malformed, invalid, failed, reused, and explicitly reprocessed results without a Gemini key.
+- `git diff --check` completed with no whitespace errors (Git emitted only line-ending conversion warnings).
+
+### Problems encountered
+
+- The first local `pytest` command used a system interpreter without SQLAlchemy. Running through the repository `.venv` resolved the environment mismatch.
+- Docker CLI access to the user configuration and daemon required the approved elevated path. Verification used an isolated temporary Docker CLI directory, which was removed afterward.
+
+### Still not done
+
+- No live Gemini call was performed because no credential was provided.
+- No embeddings, semantic matching, mismatch guard, recommendations, evaluation, frontend, durable background worker, worker retries, or budget enforcement exists.

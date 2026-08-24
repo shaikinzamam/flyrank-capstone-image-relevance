@@ -3,7 +3,7 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import BigInteger, CheckConstraint, DateTime, String, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -50,4 +50,9 @@ class ImageAsset(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
+    )
+    metadata_record: Mapped["ImageMetadata | None"] = relationship(  # noqa: F821
+        back_populates="image",
+        cascade="all, delete-orphan",
+        uselist=False,
     )

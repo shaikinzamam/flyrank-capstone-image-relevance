@@ -6,7 +6,7 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 3 secure image ingestion**. The FastAPI runtime, PostgreSQL connection, Alembic infrastructure, pgvector extension, health/readiness endpoints, and validated local image registration exist. AI processing and matching have not started, and no evaluation result exists yet.
+The project is currently at **Phase 4 vision auto-tagging**. Secure image ingestion and synchronous, single-image structured metadata analysis exist. Embeddings, matching, durable background jobs, and evaluation have not started.
 
 ## Problem
 
@@ -47,12 +47,16 @@ Three.js and React Three Fiber are intentionally excluded.
 
 - Phase 1 design artifacts: complete
 - Phase 2 backend walking skeleton: complete
-- Phase 3 secure JPEG, PNG, and WEBP ingestion: implemented and verified; awaiting approval
+- Phase 3 secure JPEG, PNG, and WEBP ingestion: complete
+- Phase 4 provider-isolated vision metadata: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
-- Image assets remain in `uploaded` status; processing is not implemented
-- AI metadata and matching domain features: not started
+- Image assets move through `uploaded`, `processing`, `processed`, and `failed`
+- Structured AI metadata is locally schema-validated before persistence
+- Confidence below `VISION_LOW_CONFIDENCE_THRESHOLD` is stored as `flagged`
+- Vision call status, latency, retry count, provider/model, and known cost are logged
+- Embeddings and matching domain features: not started
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
@@ -83,6 +87,19 @@ Invoke-RestMethod http://localhost:8000/images
 Invoke-RestMethod http://localhost:8000/images/{image_id}
 ```
 
+Analyze one uploaded image synchronously with:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/analyze
+Invoke-RestMethod -Method Post 'http://localhost:8000/images/{image_id}/analyze?reprocess=true'
+```
+
+The ordinary analyze call returns the existing metadata (`reused: true`) when one
+row already exists. The explicit `reprocess=true` form calls the provider and
+replaces that row only after the new output passes validation. This Phase 4 HTTP
+flow is intentionally synchronous; durable batch/background processing and retry
+orchestration remain Phase 5 work.
+
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 
 ## Evaluation
@@ -109,4 +126,7 @@ The demo will also show batch progress, structured metadata, explanations, a hum
 - Thresholds must be tuned against labeled data before they can be considered reliable.
 - Local filesystem image storage is suitable for the capstone but not a distributed production deployment.
 - Authentication and workspace isolation are not implemented yet; the image table is intentionally unscoped until that boundary is designed.
+- The Phase 4 taxonomy is intentionally limited to red fox, gray wolf, domestic dog, brown bear, and white-tailed deer; out-of-taxonomy classifications are rejected.
+- The default `0.70` low-confidence threshold is configurable and provisional until evaluation tunes it.
+- AI call logs record `estimated_cost_usd` as unknown when the provider does not return a reliable per-call cost; budget enforcement is not implemented in this phase.
 - The premium frontend is presentation polish, not part of the backend correctness core.
