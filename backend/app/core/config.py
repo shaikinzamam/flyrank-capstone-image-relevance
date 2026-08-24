@@ -83,6 +83,23 @@ class Settings(BaseSettings):
         gt=0,
         validation_alias="WORKER_POLL_SECONDS",
     )
+    embedding_provider: str = Field(
+        default="local", validation_alias="EMBEDDING_PROVIDER"
+    )
+    embedding_model: str = Field(
+        default="sentence-transformers/all-MiniLM-L6-v2",
+        validation_alias="EMBEDDING_MODEL",
+    )
+    embedding_version: str = Field(
+        default="c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+        validation_alias="EMBEDDING_VERSION",
+    )
+    embedding_dimensions: PositiveInt = Field(
+        default=384, validation_alias="EMBEDDING_DIMENSIONS"
+    )
+    embedding_normalize: bool = Field(
+        default=True, validation_alias="EMBEDDING_NORMALIZE"
+    )
 
     @field_validator(
         "vision_budget_usd",
@@ -107,6 +124,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PROCESSING_LEASE_SECONDS must exceed VISION_TIMEOUT_SECONDS"
             )
+        if self.embedding_dimensions != 384:
+            raise ValueError(
+                "EMBEDDING_DIMENSIONS must be 384 to match the pgvector schema"
+            )
+        if not self.embedding_normalize:
+            raise ValueError("EMBEDDING_NORMALIZE must remain enabled")
         return self
 
 

@@ -7,7 +7,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir ".[dev]"
+RUN pip install --no-cache-dir torch \
+      --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir ".[dev]"
 
 COPY alembic.ini ./
 COPY alembic ./alembic
@@ -20,4 +22,3 @@ RUN chmod +x /app/docker-entrypoint.sh
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-

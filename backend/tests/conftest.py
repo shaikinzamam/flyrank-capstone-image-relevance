@@ -8,11 +8,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.api.dependencies import get_image_storage, get_vision_provider
+from app.api.dependencies import (
+    get_embedding_provider,
+    get_image_storage,
+    get_vision_provider,
+)
 from app.db.base import Base
 from app.db.session import get_db_session
 from app.main import app
 from app.providers.fake import FakeVisionProvider
+from app.providers.embedding import FakeEmbeddingProvider
 from app.services.image_storage import LocalImageStorage
 
 
@@ -28,6 +33,7 @@ class ImageApiContext:
     storage: LocalImageStorage
     session_factory: sessionmaker[Session]
     vision_provider: FakeVisionProvider
+    embedding_provider: FakeEmbeddingProvider
 
 
 @pytest.fixture
@@ -61,6 +67,7 @@ def image_api(tmp_path: Path) -> Generator[ImageApiContext, None, None]:
             "confidence": 0.96,
         }
     )
+    embedding_provider = FakeEmbeddingProvider()
 
     def override_database_session() -> Generator[Session, None, None]:
         session = test_session_factory()
@@ -72,6 +79,7 @@ def image_api(tmp_path: Path) -> Generator[ImageApiContext, None, None]:
     app.dependency_overrides[get_db_session] = override_database_session
     app.dependency_overrides[get_image_storage] = lambda: storage
     app.dependency_overrides[get_vision_provider] = lambda: vision_provider
+    app.dependency_overrides[get_embedding_provider] = lambda: embedding_provider
     try:
         with TestClient(app) as test_client:
             yield ImageApiContext(
@@ -79,9 +87,11 @@ def image_api(tmp_path: Path) -> Generator[ImageApiContext, None, None]:
                 storage,
                 test_session_factory,
                 vision_provider,
+                embedding_provider,
             )
     finally:
         app.dependency_overrides.pop(get_db_session, None)
         app.dependency_overrides.pop(get_image_storage, None)
         app.dependency_overrides.pop(get_vision_provider, None)
+        app.dependency_overrides.pop(get_embedding_provider, None)
         engine.dispose()

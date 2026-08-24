@@ -175,3 +175,62 @@ This log records how AI assistance was used, which design choices were made, and
 
 - No live Gemini call was performed; Docker verification used the deterministic fake provider.
 - No embeddings, semantic matching, mismatch guard, recommendations, evaluation, frontend, or Phase 6 functionality exists.
+
+## 2026-08-24 — Phase 6 embeddings and vector persistence
+
+### AI assistance
+
+- Used Codex to implement the provider-isolated embedding layer, deterministic
+  semantic text, post domain/API, pgvector persistence, call accounting,
+  migration, tests, and documentation.
+
+### Decisions
+
+- Use `sentence-transformers/all-MiniLM-L6-v2` for images and posts with 384
+  dimensions and L2 normalization. Pin model loading and persistence identity to
+  Hugging Face revision `c9745ed1d9f207416be6d2e6f8de32d1f16199bf`.
+- Keep sentence-transformers behind `EmbeddingProvider`, load it lazily, and use
+  a hash-derived normalized fake so ordinary tests never download a model.
+- Add explicit image/post embedding endpoints instead of changing the approved
+  Phase 5 vision job. Embedding failures therefore cannot rewrite vision-job
+  completion semantics.
+- Hash the centralized semantic text with SHA-256. Reuse an unchanged
+  resource/model/version row, replace its vector after content changes, and create
+  a separate constrained row after a compatible model/version change.
+- Permit flagged low-confidence image metadata to be embedded without changing
+  its flag. The later mismatch guard remains responsible for rejecting it.
+- Validate provider dimensions, vector length, numeric types, and finiteness before
+  persistence. Store every actual local call with zero estimated cost and a clear
+  `embedding_generate` operation.
+- Add exact `vector(384)` columns without FAISS, HNSW, ranking, or recommendations.
+
+### Verification performed
+
+- Final local deterministic suite: `56 passed, 2 PostgreSQL-only tests skipped in 3.53s`.
+- Final PostgreSQL-enabled host suite: `58 passed in 5.51s`, including a real pgvector
+  384-value round trip and the existing two-worker concurrency test.
+- Final rebuilt CPU-only Python 3.12 container suite: `58 passed in 3.77s`; API and
+  PostgreSQL were healthy and the separate worker was running afterward.
+- Container runtime import check reported sentence-transformers `3.4.1` and
+  PyTorch `2.13.0+cpu`. Model weights were intentionally not downloaded.
+- Live PostgreSQL reached Alembic `0006`; `alembic check` reported no new upgrade
+  operations; both vector columns reported `vector(384)` under pgvector `0.8.6`.
+- A uniquely named disposable database completed `base -> 0006 -> 0005 -> 0006`
+  and was removed. The live development database was not downgraded.
+
+### Problems encountered
+
+- The first container rebuild selected CUDA-enabled PyTorch packages. It was
+  stopped before that unnecessary multi-gigabyte download; the Dockerfile now
+  installs PyTorch from the official CPU wheel index before sentence-transformers.
+- The first compile command referenced `backend/.venv`; rerunning with the root
+  virtual environment succeeded.
+- The first PostgreSQL-enabled pytest command omitted `DATABASE_URL`, so its two
+  opt-in tests failed before connecting. Exporting the explicit Compose database
+  URL produced the final 57-test passing run.
+
+### Still not done
+
+- No real sentence-transformers smoke test has been claimed.
+- Semantic ranking, mismatch guard, recommendations, evaluation, review workflow,
+  authentication/tenant work, and frontend remain unimplemented.

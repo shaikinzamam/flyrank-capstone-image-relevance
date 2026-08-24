@@ -28,11 +28,17 @@ These checks establish infrastructure only and do not complete the feature-level
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
 - [x] **Phase 4 evidence — Confidence policy:** The configurable provisional threshold flags low-confidence metadata in both `is_low_confidence` and `metadata_status`, and the API exposes both fields.
 - [x] **Phase 5 evidence — Background processing:** `POST /images/process` durably creates batch jobs and returns `202`; a separate worker claims leased PostgreSQL items, applies bounded transient retries, recovers expired leases, and reports completed, partial-error, or failed outcomes.
-- [ ] **Pending — Full cost accounting:** Phase 4 durably logs each vision attempt, including unknown cost as null; embedding accounting and budget enforcement remain unimplemented.
+- [x] **Phase 6 evidence — Full AI-call accounting:** Vision attempts retain
+  Phase 4/5 accounting. Every actual local embedding call records its resource,
+  provider/model, operation, outcome, latency, retry count, and zero estimated cost;
+  tests cover successful, invalid-vector, and provider-failure logs.
 
 ## Matching system
 
-- [ ] **Pending — Stored embeddings:** Image and post embeddings are persisted, and posts return ranked image suggestions.
+- [x] **Phase 6 evidence — Stored embeddings:** Image and post vectors round-trip
+  through PostgreSQL `vector(384)` columns with model/version/dimension/source-hash
+  metadata and uniqueness constraints. Ranking remains pending.
+- [ ] **Pending — Ranked suggestions:** Posts return ranked image suggestions.
 - [ ] **Pending — Equivalent concepts:** Semantic matching demonstrates that `red fox` matches `Vulpes vulpes`.
 
 ## Safety layer
@@ -43,7 +49,8 @@ These checks establish infrastructure only and do not complete the feature-level
 
 ## Backend
 
-- [ ] **Pending — Persistence:** Migrated database models exist for images, tags/metadata, embeddings, posts, suggestions, and approvals/rejections, with required indexes.
+- [ ] **Partial — Persistence:** Migrated models now exist for images, metadata,
+  posts, and embeddings. Suggestions and review records remain pending.
 - [ ] **Pending — API validation:** Endpoint input is validated and bad requests produce clean 4xx responses.
 - [ ] **Pending — Review workflow:** A user can inspect why a suggestion was made and approve or reject it.
 - [ ] **Pending — Authorization:** Minimum real authentication and authorization protect non-public endpoints.
@@ -58,6 +65,10 @@ These checks establish infrastructure only and do not complete the feature-level
 - [ ] **Pending — Mismatch tests:** Automated tests cover the forced fox-versus-wolf rejection.
 - [ ] **Pending — Matching tests:** Automated tests cover matching accuracy and equivalent concepts.
 - [x] **Phase 5 evidence — Resilience tests:** Tests cover provider failure, successful retry, permanent failure, exhaustion, active-lease exclusion, expired-lease recovery, idempotent job requests, budget denial, inaccessible storage, and real PostgreSQL concurrent claiming.
+- [x] **Phase 6 evidence — Embedding tests:** Deterministic tests cover semantic
+  text, image/post persistence, reuse and regeneration, compatible version changes,
+  dimensions/non-finite rejection, missing resources/metadata, low confidence,
+  provider failure, zero-cost logs, and a real PostgreSQL pgvector round trip.
 - [ ] **Pending — Evaluation:** A labeled dataset reports a real top-1 precision value.
 - [ ] **Pending — README metric:** The measured evaluation value is recorded in `README.md` and matches evaluator output.
 - [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.

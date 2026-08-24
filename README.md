@@ -50,6 +50,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 3 secure JPEG, PNG, and WEBP ingestion: complete
 - Phase 4 provider-isolated vision metadata: implemented
 - Phase 5 durable background processing: implemented
+- Phase 6 embedding generation and pgvector persistence: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -61,7 +62,9 @@ Three.js and React Three Fiber are intentionally excluded.
 - A separate worker uses PostgreSQL `FOR UPDATE SKIP LOCKED`, leases, and capped exponential backoff
 - Job and item inspection expose progress, timestamps, attempts, and clean terminal errors
 - Expired leases can be reclaimed after worker interruption
-- Embeddings and matching domain features: not started
+- Deterministic image/post semantic text, content-aware embeddings, and
+  `vector(384)` persistence: implemented
+- Semantic ranking, mismatch guard, and recommendations: not started
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
@@ -124,6 +127,31 @@ The Compose stack runs PostgreSQL, API, and worker processes. Its default
 `VISION_PROVIDER=fake` is deliberate so deterministic worker verification never
 uses credentials or incurs cost. Set `VISION_PROVIDER=gemini`, a Gemini key, an
 explicit conservative per-call estimate, and a total demo budget to use Gemini.
+
+Create and embed a post, or explicitly embed schema-valid image metadata:
+
+```powershell
+$post = Invoke-RestMethod -Method Post -ContentType application/json `
+  -Body '{"title":"Winter foxes","body":"A red fox in snow.","expected_subject":"red fox","expected_category":"animal"}' `
+  http://localhost:8000/posts
+Invoke-RestMethod -Method Post http://localhost:8000/posts/$($post.id)/embedding
+Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/embedding
+```
+
+Both resource types use `sentence-transformers/all-MiniLM-L6-v2` pinned to model
+revision `c9745ed1d9f207416be6d2e6f8de32d1f16199bf`, 384 dimensions, and L2
+normalization. The local
+provider is loaded lazily. Normal tests override it with a deterministic fake and
+never download a model. A SHA-256 hash of the centralized semantic text allows an
+unchanged resource/model/version to reuse its row without another provider call;
+changed content updates that row, while a changed compatible model/version creates
+a separately constrained row. Each actual embedding call is logged with provider
+`local`, operation `embedding_generate`, latency/status, and estimated cost `0`.
+
+Low-confidence image metadata remains `flagged` and is eligible for embedding so
+it can support later observability experiments. Embedding does not make it
+trusted; the future mismatch guard must reject it. Phase 6 uses explicit embedding
+endpoints rather than changing the approved Phase 5 vision-job semantics.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 

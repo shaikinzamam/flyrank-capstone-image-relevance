@@ -2,7 +2,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
-from app.api.dependencies import ImageAnalysis, ImageAssetsService, ProcessingJobs
+from app.api.dependencies import Embeddings, ImageAnalysis, ImageAssetsService, ProcessingJobs
+from app.schemas.embedding import EmbeddingResponse
 from app.schemas.image_asset import ImageAssetResponse
 from app.schemas.image_metadata import AnalyzeImageResponse, ImageMetadataResponse
 from app.schemas.processing_job import (
@@ -32,9 +33,45 @@ from app.services.processing_jobs import (
     IdempotencyConflictError,
     ProcessingImagesNotFoundError,
 )
+from app.services.embeddings import (
+    EmbeddingConfigurationError,
+    EmbeddingEligibilityError,
+    EmbeddingPersistenceError,
+    EmbeddingProviderFailureError,
+    EmbeddingValidationError,
+)
 from app.api.routes.jobs import job_response
 
 router = APIRouter(prefix="/images", tags=["images"])
+
+
+@router.post("/{image_id}/embedding", response_model=EmbeddingResponse)
+def create_image_embedding(
+    image_id: UUID, service: Embeddings
+) -> EmbeddingResponse:
+    try:
+        embedding, reused = service.embed_image(image_id)
+    except ImageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except EmbeddingEligibilityError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (EmbeddingProviderFailureError, EmbeddingPersistenceError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (EmbeddingValidationError, EmbeddingConfigurationError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return EmbeddingResponse(
+        id=embedding.id,
+        resource_id=embedding.image_id,
+        resource_type="image",
+        embedding_model=embedding.embedding_model,
+        embedding_version=embedding.embedding_version,
+        dimensions=embedding.dimensions,
+        source_text_hash=embedding.source_text_hash,
+        reused=reused,
+        is_low_confidence=service.image_is_low_confidence(image_id),
+        created_at=embedding.created_at,
+        updated_at=embedding.updated_at,
+    )
 
 
 @router.post(

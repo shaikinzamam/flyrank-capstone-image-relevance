@@ -84,10 +84,18 @@ Malformed output, schema violations, missing images/files, provider
 misconfiguration, and budget denial are permanent item failures. Job counters are
 recomputed under a job-row lock after each terminal item transition.
 
+Phase 6 deliberately does not append embedding work to this job. The narrow
+`POST /images/{id}/embedding` and `POST /posts/{id}/embedding` operations keep
+vision-job completion semantics stable and make embedding failures independently
+visible. A later phase may introduce a separately typed durable embedding job if
+the corpus workflow requires it.
+
 ### Providers
 
 - `VisionProvider` isolates Gemini request/response handling and permits a future local implementation.
-- `EmbeddingService` owns local sentence-transformers loading, batching, normalization, and model versioning.
+- `EmbeddingProvider` isolates local sentence-transformers and the deterministic
+  test fake. `EmbeddingService` owns eligibility, validation, reuse, accounting,
+  and persistence.
 - Raw AI output never flows directly to domain persistence.
 
 ## Main request flows
@@ -97,8 +105,8 @@ recomputed under a job-row lock after each terminal item transition.
 ```text
 upload -> validate bytes/MIME/size -> store asset -> enqueue durable item -> 202
 worker -> Gemini -> Pydantic validation -> confidence policy -> metadata
-worker -> semantic representation -> local embedding -> pgvector
-worker -> progress + per-call logs -> complete or visible failure
+explicit embedding operation -> semantic representation -> local embedding
+  -> pgvector + per-call log OR visible failure
 ```
 
 Phase 4 retains this deprecated synchronous single-image debug subset:

@@ -82,16 +82,27 @@ class AiCallLog(Base):
         CheckConstraint(
             "retry_count >= 0", name="ck_ai_call_logs_retry_nonnegative"
         ),
+        CheckConstraint(
+            "(image_id IS NOT NULL AND post_id IS NULL) OR "
+            "(image_id IS NULL AND post_id IS NOT NULL)",
+            name="ck_ai_call_logs_one_resource",
+        ),
         Index("ix_ai_call_logs_image_id_created_at", "image_id", "created_at"),
+        Index("ix_ai_call_logs_post_id_created_at", "post_id", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4
     )
-    image_id: Mapped[UUID] = mapped_column(
+    image_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("image_assets.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+    )
+    post_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("posts.id", ondelete="CASCADE"),
+        nullable=True,
     )
     provider: Mapped[str] = mapped_column(String(50))
     model: Mapped[str] = mapped_column(String(100))

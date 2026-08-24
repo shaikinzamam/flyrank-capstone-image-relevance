@@ -9,12 +9,17 @@ from app.db.session import get_db_session
 from app.repositories.image_assets import ImageAssetRepository
 from app.repositories.image_metadata import ImageMetadataRepository
 from app.repositories.processing_jobs import ProcessingJobRepository
+from app.repositories.embeddings import EmbeddingRepository
+from app.repositories.posts import PostRepository
+from app.providers.embedding import EmbeddingProvider, SentenceTransformerEmbeddingProvider
 from app.providers.vision import GeminiVisionProvider, VisionProvider
 from app.providers.fake import FakeVisionProvider
 from app.services.image_analysis import ImageAnalysisService
 from app.services.image_assets import ImageAssetService
 from app.services.image_storage import LocalImageStorage
 from app.services.processing_jobs import ProcessingJobService
+from app.services.embeddings import EmbeddingService
+from app.services.posts import PostService
 from app.services.readiness import DatabaseReadinessService
 
 DatabaseSession = Annotated[Session, Depends(get_db_session)]
@@ -114,3 +119,39 @@ ProcessingJobs = Annotated[
     ProcessingJobService,
     Depends(get_processing_job_service),
 ]
+
+
+@lru_cache
+def get_embedding_provider() -> EmbeddingProvider:
+    settings = get_settings()
+    if settings.embedding_provider != "local":
+        raise RuntimeError("Unsupported EMBEDDING_PROVIDER configuration")
+    return SentenceTransformerEmbeddingProvider(
+        model=settings.embedding_model,
+        version=settings.embedding_version,
+        dimensions=settings.embedding_dimensions,
+        normalize=settings.embedding_normalize,
+    )
+
+
+def get_embedding_service(
+    session: DatabaseSession,
+    provider: Annotated[EmbeddingProvider, Depends(get_embedding_provider)],
+) -> EmbeddingService:
+    return EmbeddingService(
+        EmbeddingRepository(session),
+        ImageAssetRepository(session),
+        ImageMetadataRepository(session),
+        PostRepository(session),
+        provider,
+    )
+
+
+Embeddings = Annotated[EmbeddingService, Depends(get_embedding_service)]
+
+
+def get_post_service(session: DatabaseSession) -> PostService:
+    return PostService(PostRepository(session))
+
+
+Posts = Annotated[PostService, Depends(get_post_service)]

@@ -121,6 +121,23 @@ Content hashes, unique constraints, exact-image-set idempotency keys, lease toke
 
 Redis and Celery are unnecessary for the bounded workload and are not part of the initial design.
 
+## Phase 6 embedding contract
+
+Images and posts share `sentence-transformers/all-MiniLM-L6-v2` pinned to revision
+`c9745ed1d9f207416be6d2e6f8de32d1f16199bf`, 384 dimensions, and L2-normalized
+output. Image text is built in
+a fixed subject/category/caption/tags/attributes/objects order. Post text uses the
+stored title/body and includes optional expected subject/category only when they
+exist; Phase 6 performs no AI intent extraction.
+
+The SHA-256 hash of UTF-8 semantic text is stored with each vector. The unique
+resource/model/version row is reused when its hash is unchanged, updated after a
+content change, and supplemented by a new row for another compatible
+model/version. Vectors must be non-empty, exactly 384-dimensional, finite numeric
+values before persistence. Flagged low-confidence metadata is embeddable but
+remains flagged for the future guard. Exact search is deferred with ranking; no
+HNSW or FAISS index is introduced.
+
 ## Authentication and workspace isolation
 
 The implementation will use the minimum real authentication mechanism needed by the capstone. All owned records will carry a workspace identifier, authorization will be enforced at the boundary and repository query level, and automated tests will attempt cross-workspace access.

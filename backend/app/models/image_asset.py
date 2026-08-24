@@ -56,3 +56,6 @@ class ImageAsset(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    embeddings: Mapped[list["ImageEmbedding"]] = relationship(  # noqa: F821
+        back_populates="image", cascade="all, delete-orphan"
+    )
