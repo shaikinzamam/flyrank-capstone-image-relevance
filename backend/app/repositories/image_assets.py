@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -16,6 +17,13 @@ class ImageAssetRepository:
     def get_by_sha256(self, sha256: str) -> ImageAsset | None:
         return self._session.scalar(
             select(ImageAsset).where(ImageAsset.sha256 == sha256)
+        )
+
+    def get_many(self, image_ids: Sequence[UUID]) -> list[ImageAsset]:
+        return list(
+            self._session.scalars(
+                select(ImageAsset).where(ImageAsset.id.in_(image_ids))
+            )
         )
 
     def list(self, *, offset: int, limit: int) -> list[ImageAsset]:

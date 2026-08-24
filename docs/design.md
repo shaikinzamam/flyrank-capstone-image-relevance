@@ -115,9 +115,9 @@ That Python file is intentionally not created during Phase 1. Threshold values w
 
 ## Durable job design
 
-The API will persist a processing job and item records, then return without waiting for slow AI work. A separate worker will claim available items using PostgreSQL locking and leases. It will maintain attempts, progress, heartbeats, terminal errors, and retry schedules.
+The API persists processing jobs and item records, then returns `202` without waiting for AI work. A separate worker claims available items using PostgreSQL row locking with `SKIP LOCKED` and expiring leases. It maintains attempts, progress, terminal errors, and retry schedules. Leases are configured longer than provider timeouts; an abandoned lease is reclaimed without relying on an in-process heartbeat.
 
-Content hashes, unique constraints, and idempotency keys will prevent duplicate retried operations from producing duplicate effects. Exhausted jobs will create a visible failure event. Every vision and embedding attempt, including failures and zero-cost local calls, will create an attributed cost record. A configurable budget guard will run before paid-provider calls.
+Content hashes, unique constraints, exact-image-set idempotency keys, lease tokens, and the one-row metadata upsert prevent duplicate durable effects under request retries and at-least-once execution. Every vision attempt, including failures and zero-cost fake calls, creates an attributed call record. The configurable total-demo budget atomically reserves an operator-supplied conservative cost estimate before provider calls. Embedding accounting remains future work.
 
 Redis and Celery are unnecessary for the bounded workload and are not part of the initial design.
 
@@ -155,4 +155,3 @@ The checked-in records are planned labels only. They have not been evaluated, an
 - A tiny dataset can overfit thresholds and inflate metrics.
 - Corpus licensing and repository size must remain reproducible and auditable.
 - Frontend polish can distract from acceptance-probe correctness.
-

@@ -72,6 +72,18 @@ The mismatch guard is a deterministic service inside the application layer. It i
 - Make duplicate delivery safe.
 - Record progress, costs, latency, failures, and terminal alerts.
 
+The implemented Phase 5 worker is a separate `python -m
+app.workers.image_processing` process. It atomically selects eligible items with
+PostgreSQL `FOR UPDATE SKIP LOCKED`, assigns a unique lease token, and commits the
+claim before invoking vision. Only the current lease token may commit an item
+outcome. Expired leases are eligible for another worker; an expired final attempt
+is terminally failed.
+
+Transient provider timeouts/unavailability use capped exponential backoff.
+Malformed output, schema violations, missing images/files, provider
+misconfiguration, and budget denial are permanent item failures. Job counters are
+recomputed under a job-row lock after each terminal item transition.
+
 ### Providers
 
 - `VisionProvider` isolates Gemini request/response handling and permits a future local implementation.
@@ -89,15 +101,16 @@ worker -> semantic representation -> local embedding -> pgvector
 worker -> progress + per-call logs -> complete or visible failure
 ```
 
-Phase 4 implements only the synchronous single-image subset:
+Phase 4 retains this deprecated synchronous single-image debug subset:
 
 ```text
 POST /images/{id}/analyze -> stored-file validation -> VisionProvider
   -> strict Pydantic validation -> confidence flag -> one metadata row
 ```
 
-The durable worker flow above remains the Phase 5 target and is not satisfied by
-the synchronous endpoint.
+Phase 5 implements the durable worker flow for production processing through
+`POST /images/process`. Job creation is idempotent by unique key and exact image
+set; status and item inspection are available under `/jobs/{id}`.
 
 ### Article matching
 
@@ -119,6 +132,6 @@ no accepted candidates
     -> NO_CONFIDENT_MATCH
 ```
 
-## Planned deployment boundary
+## Deployment boundary
 
-Docker Compose will eventually start PostgreSQL, the FastAPI process, and a separate worker process. The frontend will be added only after the backend probes pass. Redis, Celery, Three.js, and React Three Fiber are not planned.
+Docker Compose starts PostgreSQL, the FastAPI process, and a separate image-processing worker. The deterministic Compose default uses the fake vision provider; Gemini remains an explicit environment configuration. The frontend will be added only after the backend probes pass. Redis, Celery, Three.js, and React Three Fiber are not planned.

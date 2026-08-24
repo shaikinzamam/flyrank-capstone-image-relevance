@@ -16,6 +16,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
+    image: imagerelevanceauto-tagging-api
     build:
       context: ./backend
     environment:
@@ -24,11 +25,18 @@ services:
       IMAGE_STORAGE_ROOT: /app/uploads
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
       MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
-      VISION_PROVIDER: ${VISION_PROVIDER:-gemini}
+      VISION_PROVIDER: ${VISION_PROVIDER:-fake}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_VISION_MODEL: ${GEMINI_VISION_MODEL:-gemini-2.5-flash}
       VISION_TIMEOUT_SECONDS: ${VISION_TIMEOUT_SECONDS:-30}
       VISION_LOW_CONFIDENCE_THRESHOLD: ${VISION_LOW_CONFIDENCE_THRESHOLD:-0.70}
+      VISION_BUDGET_USD: ${VISION_BUDGET_USD:-0.00}
+      VISION_ESTIMATED_COST_PER_CALL_USD: ${VISION_ESTIMATED_COST_PER_CALL_USD:-}
+      PROCESSING_MAX_ATTEMPTS: ${PROCESSING_MAX_ATTEMPTS:-3}
+      PROCESSING_INITIAL_BACKOFF_SECONDS: ${PROCESSING_INITIAL_BACKOFF_SECONDS:-5}
+      PROCESSING_MAX_BACKOFF_SECONDS: ${PROCESSING_MAX_BACKOFF_SECONDS:-300}
+      PROCESSING_LEASE_SECONDS: ${PROCESSING_LEASE_SECONDS:-60}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-1}
     depends_on:
       db:
         condition: service_healthy
@@ -45,6 +53,34 @@ services:
       retries: 12
     ports:
       - "8000:8000"
+    volumes:
+      - image_uploads:/app/uploads
+
+  worker:
+    image: imagerelevanceauto-tagging-api
+    command: ["python", "-m", "app.workers.image_processing"]
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-flyrank}:${POSTGRES_PASSWORD:-flyrank}@db:5432/${POSTGRES_DB:-flyrank}
+      IMAGE_STORAGE_ROOT: /app/uploads
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      VISION_PROVIDER: ${VISION_PROVIDER:-fake}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_VISION_MODEL: ${GEMINI_VISION_MODEL:-gemini-2.5-flash}
+      VISION_TIMEOUT_SECONDS: ${VISION_TIMEOUT_SECONDS:-30}
+      VISION_LOW_CONFIDENCE_THRESHOLD: ${VISION_LOW_CONFIDENCE_THRESHOLD:-0.70}
+      VISION_BUDGET_USD: ${VISION_BUDGET_USD:-0.00}
+      VISION_ESTIMATED_COST_PER_CALL_USD: ${VISION_ESTIMATED_COST_PER_CALL_USD:-}
+      PROCESSING_MAX_ATTEMPTS: ${PROCESSING_MAX_ATTEMPTS:-3}
+      PROCESSING_INITIAL_BACKOFF_SECONDS: ${PROCESSING_INITIAL_BACKOFF_SECONDS:-5}
+      PROCESSING_MAX_BACKOFF_SECONDS: ${PROCESSING_MAX_BACKOFF_SECONDS:-300}
+      PROCESSING_LEASE_SECONDS: ${PROCESSING_LEASE_SECONDS:-60}
+      WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-1}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
     volumes:
       - image_uploads:/app/uploads
 

@@ -2,13 +2,19 @@ from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
-from app.api.dependencies import ImageAnalysis, ImageAssetsService
+from app.api.dependencies import ImageAnalysis, ImageAssetsService, ProcessingJobs
 from app.schemas.image_asset import ImageAssetResponse
 from app.schemas.image_metadata import AnalyzeImageResponse, ImageMetadataResponse
+from app.schemas.processing_job import (
+    CreateProcessingJobRequest,
+    ProcessingJobResponse,
+)
 from app.services.image_analysis import (
     ImageStateError,
     MalformedProviderResponseError,
     MetadataValidationError,
+    VisionBudgetExceededError,
+    VisionProviderConfigurationError,
     VisionProviderFailureError,
     VisionProviderTimeoutError,
 )
@@ -22,8 +28,38 @@ from app.services.image_storage import (
     InvalidImageError,
     UnsupportedImageTypeError,
 )
+from app.services.processing_jobs import (
+    IdempotencyConflictError,
+    ProcessingImagesNotFoundError,
+)
+from app.api.routes.jobs import job_response
 
 router = APIRouter(prefix="/images", tags=["images"])
+
+
+@router.post(
+    "/process",
+    response_model=ProcessingJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_processing_job(
+    request: CreateProcessingJobRequest,
+    service: ProcessingJobs,
+) -> ProcessingJobResponse:
+    try:
+        job, reused = service.create(
+            request.image_ids,
+            idempotency_key=request.idempotency_key,
+        )
+    except ProcessingImagesNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+    return job_response(job, reused=reused)
 
 
 @router.post("", response_model=ImageAssetResponse, status_code=status.HTTP_201_CREATED)
@@ -82,7 +118,11 @@ def get_image(image_id: UUID, service: ImageAssetsService) -> ImageAssetResponse
     return ImageAssetResponse.model_validate(asset)
 
 
-@router.post("/{image_id}/analyze", response_model=AnalyzeImageResponse)
+@router.post(
+    "/{image_id}/analyze",
+    response_model=AnalyzeImageResponse,
+    deprecated=True,
+)
 def analyze_image(
     image_id: UUID,
     service: ImageAnalysis,
@@ -108,6 +148,16 @@ def analyze_image(
     except VisionProviderFailureError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except VisionProviderConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except VisionBudgetExceededError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(exc),
         ) from exc
     except (MalformedProviderResponseError, MetadataValidationError) as exc:

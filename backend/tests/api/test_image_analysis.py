@@ -159,7 +159,7 @@ def test_valid_metadata_and_call_accounting_are_persisted(
         assert call is not None
         assert call.status == "succeeded"
         assert call.retry_count == 0
-        assert call.estimated_cost_usd is None
+        assert call.estimated_cost_usd == 0.0
 
 
 def test_provider_failure_marks_first_analysis_failed(

@@ -134,3 +134,44 @@ This log records how AI assistance was used, which design choices were made, and
 
 - No live Gemini call was performed because no credential was provided.
 - No embeddings, semantic matching, mismatch guard, recommendations, evaluation, frontend, durable background worker, worker retries, or budget enforcement exists.
+
+## 2026-08-24 - Phase 5 durable background processing
+
+### AI assistance
+
+- Used Codex to implement PostgreSQL-backed processing jobs/items, idempotent batch creation, inspection endpoints, a separate worker command, row-lock claiming, leases, retry scheduling, budget reservations, and deterministic worker tests.
+- Used Codex to run local and container suites, a real PostgreSQL two-worker concurrency test, migration round trips in disposable PostgreSQL databases, and live Docker queue/recovery probes.
+
+### Decisions
+
+- Return `202 Accepted` from `POST /images/process` after persisting a job and one item per unique requested image. The idempotency key is globally unique and can be reused only for the exact same image set.
+- Claim eligible rows with PostgreSQL `FOR UPDATE SKIP LOCKED`, then assign a unique lease token and commit before calling vision. Only the current token can apply an item outcome.
+- Configure three attempts by default with capped exponential backoff (`5`, `10`, then terminal failure; maximum delay `300` seconds). Only timeouts, temporary provider failures, and unexpected worker failures retry.
+- Treat malformed/schema-invalid output, missing or invalid stored images, provider misconfiguration, and budget denial as permanent.
+- Make leases longer than provider timeouts. Expired processing items below their attempt limit are reclaimable; expired final attempts become failed. Metadata remains a one-row upsert under at-least-once execution.
+- Use a total-demo vision budget. PostgreSQL advisory locking serializes checks and insertion of a `reserved` call record. The configured conservative estimate counts against the cap even after failure or crash; a missing estimate blocks paid-provider calls when budgeting is enabled.
+- Keep the synchronous analyze route deprecated and only for explicit development/debug use. Production processing uses durable jobs and the separate worker.
+- Use `ON DELETE RESTRICT` for images referenced by job history so deleting an asset cannot silently remove an item and corrupt job totals.
+
+### Verification performed
+
+- Local Python 3.13.1 suite: `46 passed, 1 PostgreSQL-only test skipped in 8.21s`.
+- Container Python 3.12.14 suite with PostgreSQL concurrency enabled: `47 passed in 4.72s`.
+- Two simultaneous PostgreSQL sessions produced exactly one claim for a single item.
+- Live database reached Alembic `0005 (head)` and `alembic check` reported no new upgrade operations.
+- A disposable PostgreSQL database successfully ran `base -> 0005 -> 0003 -> 0005`; it was removed afterward without modifying live job history.
+- Docker reported healthy API/database containers and a running separate worker.
+- With the worker stopped, a real API job was observed as `pending`; after worker start it reached `completed`, progress `1.0`, one succeeded item, trusted fake metadata, and one zero-cost call record.
+- A controlled expired-lease fixture in `processing` was reclaimed after worker restart and completed on attempt two with its lease cleared.
+
+### Problems encountered
+
+- Docker initially passed an empty optional cost estimate as a string, causing settings validation to fail during API startup. Optional numeric settings now normalize an empty environment value to unset.
+- Job progress initially stayed `running` because test sessions disable autoflush. Explicit flushes before aggregate counter queries fixed terminal job updates.
+- A proposed downgrade of the live local database was blocked because it would delete job history. Migration reversibility was instead verified against uniquely named disposable databases.
+- The image foreign key was hardened after the first `0004` application. An additive `0005` migration preserves immutable migration history and changes deletion behavior safely.
+
+### Still not done
+
+- No live Gemini call was performed; Docker verification used the deterministic fake provider.
+- No embeddings, semantic matching, mismatch guard, recommendations, evaluation, frontend, or Phase 6 functionality exists.

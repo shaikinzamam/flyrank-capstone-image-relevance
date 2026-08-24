@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, PositiveInt
+from pydantic import Field, PositiveInt, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -52,6 +52,62 @@ class Settings(BaseSettings):
         le=1,
         validation_alias="VISION_LOW_CONFIDENCE_THRESHOLD",
     )
+    vision_budget_usd: float | None = Field(
+        default=None,
+        ge=0,
+        validation_alias="VISION_BUDGET_USD",
+    )
+    vision_estimated_cost_per_call_usd: float | None = Field(
+        default=None,
+        ge=0,
+        validation_alias="VISION_ESTIMATED_COST_PER_CALL_USD",
+    )
+    processing_max_attempts: PositiveInt = Field(
+        default=3,
+        validation_alias="PROCESSING_MAX_ATTEMPTS",
+    )
+    processing_initial_backoff_seconds: PositiveInt = Field(
+        default=5,
+        validation_alias="PROCESSING_INITIAL_BACKOFF_SECONDS",
+    )
+    processing_max_backoff_seconds: PositiveInt = Field(
+        default=300,
+        validation_alias="PROCESSING_MAX_BACKOFF_SECONDS",
+    )
+    processing_lease_seconds: PositiveInt = Field(
+        default=60,
+        validation_alias="PROCESSING_LEASE_SECONDS",
+    )
+    worker_poll_seconds: float = Field(
+        default=1.0,
+        gt=0,
+        validation_alias="WORKER_POLL_SECONDS",
+    )
+
+    @field_validator(
+        "vision_budget_usd",
+        "vision_estimated_cost_per_call_usd",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_numbers_are_unset(cls, value: object) -> object:
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def validate_worker_configuration(self) -> "Settings":
+        if (
+            self.processing_initial_backoff_seconds
+            > self.processing_max_backoff_seconds
+        ):
+            raise ValueError(
+                "PROCESSING_INITIAL_BACKOFF_SECONDS cannot exceed "
+                "PROCESSING_MAX_BACKOFF_SECONDS"
+            )
+        if self.processing_lease_seconds <= self.vision_timeout_seconds:
+            raise ValueError(
+                "PROCESSING_LEASE_SECONDS must exceed VISION_TIMEOUT_SECONDS"
+            )
+        return self
 
 
 @lru_cache

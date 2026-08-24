@@ -27,7 +27,7 @@ These checks establish infrastructure only and do not complete the feature-level
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
 - [x] **Phase 4 evidence — Confidence policy:** The configurable provisional threshold flags low-confidence metadata in both `is_low_confidence` and `metadata_status`, and the API exposes both fields.
-- [ ] **Pending — Background processing:** Images are processed through a batch background job with retries.
+- [x] **Phase 5 evidence — Background processing:** `POST /images/process` durably creates batch jobs and returns `202`; a separate worker claims leased PostgreSQL items, applies bounded transient retries, recovers expired leases, and reports completed, partial-error, or failed outcomes.
 - [ ] **Pending — Full cost accounting:** Phase 4 durably logs each vision attempt, including unknown cost as null; embedding accounting and budget enforcement remain unimplemented.
 
 ## Matching system
@@ -48,16 +48,16 @@ These checks establish infrastructure only and do not complete the feature-level
 - [ ] **Pending — Review workflow:** A user can inspect why a suggestion was made and approve or reject it.
 - [ ] **Pending — Authorization:** Minimum real authentication and authorization protect non-public endpoints.
 - [ ] **Pending — Tenant isolation:** Cross-workspace access is prevented and tested.
-- [ ] **Pending — Idempotency:** Retried job-triggering operations happen once.
-- [ ] **Pending — Failure handling:** Background failures retry and produce a visible failure alert/event.
-- [ ] **Pending — Budget guard:** AI calls are attributed, metered, and stopped by a configured budget policy when required.
+- [x] **Phase 5 evidence — Idempotency:** Reusing an idempotency key with the same image set returns the same job; using it with a different set returns `409`. Job/image uniqueness and metadata upsert constraints prevent duplicate durable rows.
+- [x] **Phase 5 evidence — Failure handling:** Transient failures retry with capped exponential backoff; permanent and exhausted failures are visible on items and aggregate into job terminal status and failure summary. Expired leases are reclaimable.
+- [x] **Phase 5 evidence — Vision budget guard:** A PostgreSQL-serialized total-demo budget reservation runs before provider calls; deterministic tests prove exhaustion prevents the provider invocation. Embedding budget accounting remains future work.
 
 ## Quality and documentation
 
 - [x] **Phase 4 evidence — Schema tests:** The deterministic suite covers valid metadata, malformed output, required fields, confidence bounds, blank/empty tags, collection normalization, taxonomy rejection, low-confidence flags, persistence, state transitions, provider timeout/failure, missing images, idempotent reuse, and explicit replacement.
 - [ ] **Pending — Mismatch tests:** Automated tests cover the forced fox-versus-wolf rejection.
 - [ ] **Pending — Matching tests:** Automated tests cover matching accuracy and equivalent concepts.
-- [ ] **Pending — Resilience tests:** Tests cover dependency failure and duplicate job delivery.
+- [x] **Phase 5 evidence — Resilience tests:** Tests cover provider failure, successful retry, permanent failure, exhaustion, active-lease exclusion, expired-lease recovery, idempotent job requests, budget denial, inaccessible storage, and real PostgreSQL concurrent claiming.
 - [ ] **Pending — Evaluation:** A labeled dataset reports a real top-1 precision value.
 - [ ] **Pending — README metric:** The measured evaluation value is recorded in `README.md` and matches evaluator output.
 - [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.

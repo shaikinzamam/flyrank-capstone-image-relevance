@@ -1,5 +1,6 @@
 from app.providers.vision import (
     GeminiVisionProvider,
+    ProviderConfigurationError,
     ProviderFailureError,
     ProviderTimeoutError,
     VisionProvider,
@@ -7,6 +8,7 @@ from app.providers.vision import (
 
 __all__ = [
     "GeminiVisionProvider",
+    "ProviderConfigurationError",
     "ProviderFailureError",
     "ProviderTimeoutError",
     "VisionProvider",

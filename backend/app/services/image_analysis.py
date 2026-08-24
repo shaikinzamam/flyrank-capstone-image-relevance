@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.models.image_asset import ProcessingStatus
 from app.models.image_metadata import AiCallLog, ImageMetadata, MetadataStatus
 from app.providers.vision import (
+    ProviderConfigurationError,
     ProviderFailureError,
     ProviderTimeoutError,
     VisionProvider,
@@ -43,6 +44,14 @@ class VisionProviderFailureError(ImageAnalysisError):
     pass
 
 
+class VisionProviderConfigurationError(ImageAnalysisError):
+    pass
+
+
+class VisionBudgetExceededError(ImageAnalysisError):
+    pass
+
+
 class ImageAnalysisService:
     def __init__(
         self,
@@ -52,18 +61,22 @@ class ImageAnalysisService:
         provider: VisionProvider,
         *,
         low_confidence_threshold: float,
+        vision_budget_usd: float | None = None,
     ) -> None:
         self._images = image_repository
         self._metadata = metadata_repository
         self._storage = storage
         self._provider = provider
         self._low_confidence_threshold = low_confidence_threshold
+        self._vision_budget_usd = vision_budget_usd
 
     def analyze(
         self,
         image_id: UUID,
         *,
         reprocess: bool,
+        retry_count: int = 0,
+        allow_processing: bool = False,
     ) -> tuple[ImageMetadata, bool]:
         asset = self._images.get(image_id)
         if asset is None:
@@ -72,7 +85,10 @@ class ImageAnalysisService:
         existing = self._metadata.get_by_image_id(image_id)
         if existing is not None and not reprocess:
             return existing, True
-        if asset.processing_status == ProcessingStatus.PROCESSING.value:
+        if (
+            asset.processing_status == ProcessingStatus.PROCESSING.value
+            and not allow_processing
+        ):
             raise ImageStateError("Image analysis is already in progress")
 
         try:
@@ -91,27 +107,54 @@ class ImageAnalysisService:
 
         started = perf_counter()
         try:
+            call_log = self._reserve_call(image_id, retry_count)
+        except VisionBudgetExceededError:
+            asset.processing_status = (
+                ProcessingStatus.PROCESSED.value
+                if existing is not None
+                else ProcessingStatus.FAILED.value
+            )
+            self._metadata.commit()
+            raise
+        try:
             raw_output = self._provider.analyze(image_path, asset.mime_type)
+        except ProviderConfigurationError as exc:
+            self._record_failure(
+                asset, existing, call_log, started, "provider_configuration"
+            )
+            raise VisionProviderConfigurationError(
+                "Vision provider is not configured"
+            ) from exc
         except ProviderTimeoutError as exc:
-            self._record_failure(asset, existing, started, "provider_timeout")
+            self._record_failure(
+                asset, existing, call_log, started, "provider_timeout"
+            )
             raise VisionProviderTimeoutError("Vision provider timed out") from exc
         except ProviderFailureError as exc:
-            self._record_failure(asset, existing, started, "provider_failure")
+            self._record_failure(
+                asset, existing, call_log, started, "provider_failure"
+            )
             raise VisionProviderFailureError("Vision provider request failed") from exc
         except Exception as exc:
-            self._record_failure(asset, existing, started, "provider_failure")
+            self._record_failure(
+                asset, existing, call_log, started, "provider_failure"
+            )
             raise VisionProviderFailureError("Vision provider request failed") from exc
 
         try:
             payload = self._parse_output(raw_output)
         except MalformedProviderResponseError:
-            self._record_failure(asset, existing, started, "malformed_response")
+            self._record_failure(
+                asset, existing, call_log, started, "malformed_response"
+            )
             raise
 
         try:
             validated = VisionMetadata.model_validate(payload)
         except ValidationError as exc:
-            self._record_failure(asset, existing, started, "schema_validation_failed")
+            self._record_failure(
+                asset, existing, call_log, started, "schema_validation_failed"
+            )
             raise MetadataValidationError(
                 "Vision metadata failed schema validation"
             ) from exc
@@ -135,9 +178,7 @@ class ImageAnalysisService:
         metadata.vision_model = self._provider.model_name
         metadata.schema_version = "1.0"
         asset.processing_status = ProcessingStatus.PROCESSED.value
-        self._metadata.add_call_log(
-            self._call_log(image_id, started, "succeeded", None)
-        )
+        self._finish_call(call_log, started, "succeeded", None)
         self._metadata.commit()
         self._metadata.refresh(metadata)
         return metadata, False
@@ -161,6 +202,7 @@ class ImageAnalysisService:
         self,
         asset: Any,
         existing: ImageMetadata | None,
+        call_log: AiCallLog,
         started: float,
         error_code: str,
     ) -> None:
@@ -169,26 +211,50 @@ class ImageAnalysisService:
             if existing is not None
             else ProcessingStatus.FAILED.value
         )
-        self._metadata.add_call_log(
-            self._call_log(asset.id, started, "failed", error_code)
-        )
+        self._finish_call(call_log, started, "failed", error_code)
         self._metadata.commit()
 
-    def _call_log(
+    def _reserve_call(
         self,
         image_id: UUID,
-        started: float,
-        status: str,
-        error_code: str | None,
+        retry_count: int,
     ) -> AiCallLog:
-        return AiCallLog(
+        estimated_cost = self._provider.estimated_cost_usd
+        if self._vision_budget_usd is not None:
+            self._metadata.reserve_budget_lock()
+            if estimated_cost is None:
+                self._metadata.rollback()
+                raise VisionBudgetExceededError(
+                    "Vision budget is enabled but per-call cost is not configured"
+                )
+            if (
+                self._metadata.total_estimated_cost() + estimated_cost
+                > self._vision_budget_usd
+            ):
+                self._metadata.rollback()
+                raise VisionBudgetExceededError("Vision processing budget is exhausted")
+        call_log = AiCallLog(
             image_id=image_id,
             provider=self._provider.provider_name,
             model=self._provider.model_name,
             operation="vision_analyze",
-            status=status,
-            latency_ms=max(0, round((perf_counter() - started) * 1000)),
-            retry_count=0,
-            estimated_cost_usd=None,
-            error_code=error_code,
+            status="reserved",
+            latency_ms=0,
+            retry_count=retry_count,
+            estimated_cost_usd=estimated_cost,
+            error_code=None,
         )
+        self._metadata.add_call_log(call_log)
+        self._metadata.commit()
+        return call_log
+
+    @staticmethod
+    def _finish_call(
+        call_log: AiCallLog,
+        started: float,
+        status: str,
+        error_code: str | None,
+    ) -> None:
+        call_log.status = status
+        call_log.latency_ms = max(0, round((perf_counter() - started) * 1000))
+        call_log.error_code = error_code

@@ -14,6 +14,10 @@ class ProviderFailureError(Exception):
     pass
 
 
+class ProviderConfigurationError(Exception):
+    pass
+
+
 class VisionProvider(ABC):
     @property
     @abstractmethod
@@ -22,6 +26,10 @@ class VisionProvider(ABC):
     @property
     @abstractmethod
     def model_name(self) -> str: ...
+
+    @property
+    @abstractmethod
+    def estimated_cost_usd(self) -> float | None: ...
 
     @abstractmethod
     def analyze(self, image_path: Path, mime_type: str) -> object: ...
@@ -34,10 +42,12 @@ class GeminiVisionProvider(VisionProvider):
         api_key: str | None,
         model: str,
         timeout_seconds: int,
+        estimated_cost_usd: float | None = None,
     ) -> None:
         self._api_key = api_key
         self._model = model
         self._timeout_ms = timeout_seconds * 1000
+        self._estimated_cost_usd = estimated_cost_usd
 
     @property
     def provider_name(self) -> str:
@@ -47,9 +57,13 @@ class GeminiVisionProvider(VisionProvider):
     def model_name(self) -> str:
         return self._model
 
+    @property
+    def estimated_cost_usd(self) -> float | None:
+        return self._estimated_cost_usd
+
     def analyze(self, image_path: Path, mime_type: str) -> object:
         if not self._api_key:
-            raise ProviderFailureError("Gemini vision is not configured")
+            raise ProviderConfigurationError("Gemini vision is not configured")
         try:
             from google import genai
             from google.genai import types

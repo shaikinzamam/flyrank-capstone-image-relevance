@@ -6,7 +6,7 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 4 vision auto-tagging**. Secure image ingestion and synchronous, single-image structured metadata analysis exist. Embeddings, matching, durable background jobs, and evaluation have not started.
+The project is currently at **Phase 5 durable background image processing**. The API creates idempotent batch jobs, a separate PostgreSQL-backed worker claims leased items, and validated vision metadata is processed with bounded retries and progress tracking. Embeddings, matching, and evaluation have not started.
 
 ## Problem
 
@@ -49,6 +49,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 2 backend walking skeleton: complete
 - Phase 3 secure JPEG, PNG, and WEBP ingestion: complete
 - Phase 4 provider-isolated vision metadata: implemented
+- Phase 5 durable background processing: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -56,6 +57,10 @@ Three.js and React Three Fiber are intentionally excluded.
 - Structured AI metadata is locally schema-validated before persistence
 - Confidence below `VISION_LOW_CONFIDENCE_THRESHOLD` is stored as `flagged`
 - Vision call status, latency, retry count, provider/model, and known cost are logged
+- `POST /images/process` returns an idempotent durable job with `202 Accepted`
+- A separate worker uses PostgreSQL `FOR UPDATE SKIP LOCKED`, leases, and capped exponential backoff
+- Job and item inspection expose progress, timestamps, attempts, and clean terminal errors
+- Expired leases can be reclaimed after worker interruption
 - Embeddings and matching domain features: not started
 - Corpus collection: not started
 - Evaluation execution: not started
@@ -98,7 +103,27 @@ The ordinary analyze call returns the existing metadata (`reused: true`) when on
 row already exists. The explicit `reprocess=true` form calls the provider and
 replaces that row only after the new output passes validation. This Phase 4 HTTP
 flow is intentionally synchronous; durable batch/background processing and retry
-orchestration remain Phase 5 work.
+orchestration are implemented by the Phase 5 job path. This synchronous endpoint
+is deprecated and retained only for explicit development/debug use; production
+clients should create jobs instead.
+
+Queue one or more uploaded images without waiting for vision processing:
+
+```powershell
+$body = @{
+  image_ids = @("IMAGE_UUID_1", "IMAGE_UUID_2")
+  idempotency_key = "demo-batch-001"
+} | ConvertTo-Json
+$job = Invoke-RestMethod -Method Post -ContentType application/json `
+  -Body $body http://localhost:8000/images/process
+Invoke-RestMethod http://localhost:8000/jobs/$($job.id)
+Invoke-RestMethod http://localhost:8000/jobs/$($job.id)/items
+```
+
+The Compose stack runs PostgreSQL, API, and worker processes. Its default
+`VISION_PROVIDER=fake` is deliberate so deterministic worker verification never
+uses credentials or incurs cost. Set `VISION_PROVIDER=gemini`, a Gemini key, an
+explicit conservative per-call estimate, and a total demo budget to use Gemini.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 
@@ -128,5 +153,6 @@ The demo will also show batch progress, structured metadata, explanations, a hum
 - Authentication and workspace isolation are not implemented yet; the image table is intentionally unscoped until that boundary is designed.
 - The Phase 4 taxonomy is intentionally limited to red fox, gray wolf, domestic dog, brown bear, and white-tailed deer; out-of-taxonomy classifications are rejected.
 - The default `0.70` low-confidence threshold is configurable and provisional until evaluation tunes it.
-- AI call logs record `estimated_cost_usd` as unknown when the provider does not return a reliable per-call cost; budget enforcement is not implemented in this phase.
+- The budget guard is a total-demo cap. It atomically reserves the configured conservative estimated cost before every provider attempt; when budgeting is enabled, a missing estimate blocks the call.
+- Processing is at-least-once. Lease tokens prevent stale workers from completing reclaimed items, while the unique metadata row makes repeated processing persistence idempotent. A crash after a provider call can still require another billed call after lease recovery.
 - The premium frontend is presentation polish, not part of the backend correctness core.
