@@ -37,8 +37,11 @@ These checks establish infrastructure only and do not complete the feature-level
 
 - [x] **Phase 6 evidence — Stored embeddings:** Image and post vectors round-trip
   through PostgreSQL `vector(384)` columns with model/version/dimension/source-hash
-  metadata and uniqueness constraints. Ranking remains pending.
-- [ ] **Pending — Ranked suggestions:** Posts return ranked image suggestions.
+  metadata and uniqueness constraints.
+- [x] **Phase 7 evidence — Ranked candidates:** The post candidate endpoint uses
+  exact pgvector cosine distance, converts it to descending similarity, limits in
+  SQL, and returns typed metadata snapshots with deterministic UUID tie handling.
+- [ ] **Pending — Guarded suggestions:** Posts return safety-checked image suggestions.
 - [ ] **Pending — Equivalent concepts:** Semantic matching demonstrates that `red fox` matches `Vulpes vulpes`.
 
 ## Safety layer
@@ -69,6 +72,10 @@ These checks establish infrastructure only and do not complete the feature-level
   text, image/post persistence, reuse and regeneration, compatible version changes,
   dimensions/non-finite rejection, missing resources/metadata, low confidence,
   provider failure, zero-cost logs, and a real PostgreSQL pgvector round trip.
+- [x] **Phase 7 evidence — Retrieval tests:** Deterministic API tests cover scores,
+  order, limits, missing state, compatibility, low-confidence visibility, metadata,
+  corrupt-metadata exclusion, ties, and no false AI logs. A PostgreSQL integration
+  test proves fox/wolf/dog ordering with known 384-dimensional vectors.
 - [ ] **Pending — Evaluation:** A labeled dataset reports a real top-1 precision value.
 - [ ] **Pending — README metric:** The measured evaluation value is recorded in `README.md` and matches evaluator output.
 - [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.

@@ -11,6 +11,7 @@ from app.repositories.image_metadata import ImageMetadataRepository
 from app.repositories.processing_jobs import ProcessingJobRepository
 from app.repositories.embeddings import EmbeddingRepository
 from app.repositories.posts import PostRepository
+from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.providers.embedding import EmbeddingProvider, SentenceTransformerEmbeddingProvider
 from app.providers.vision import GeminiVisionProvider, VisionProvider
 from app.providers.fake import FakeVisionProvider
@@ -20,6 +21,7 @@ from app.services.image_storage import LocalImageStorage
 from app.services.processing_jobs import ProcessingJobService
 from app.services.embeddings import EmbeddingService
 from app.services.posts import PostService
+from app.services.image_retrieval import ImageRetrievalService
 from app.services.readiness import DatabaseReadinessService
 
 DatabaseSession = Annotated[Session, Depends(get_db_session)]
@@ -155,3 +157,21 @@ def get_post_service(session: DatabaseSession) -> PostService:
 
 
 Posts = Annotated[PostService, Depends(get_post_service)]
+
+
+def get_image_retrieval_service(
+    session: DatabaseSession,
+    provider: Annotated[EmbeddingProvider, Depends(get_embedding_provider)],
+) -> ImageRetrievalService:
+    return ImageRetrievalService(
+        PostRepository(session),
+        ImageRetrievalRepository(session),
+        embedding_model=provider.model_name,
+        embedding_version=provider.model_version,
+        dimensions=provider.dimensions,
+    )
+
+
+ImageRetrieval = Annotated[
+    ImageRetrievalService, Depends(get_image_retrieval_service)
+]

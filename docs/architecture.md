@@ -50,6 +50,9 @@ The mismatch guard is a deterministic service inside the application layer. It i
 - Apply idempotency and state-transition rules.
 - Invoke provider interfaces rather than vendor clients directly.
 - Call the deterministic mismatch guard for every candidate.
+- Phase 7 `ImageRetrievalService` loads the configured post vector, enforces
+  embedding compatibility, converts cosine distance to similarity, and produces
+  typed candidate snapshots. It makes no guard decision.
 
 ### Repositories
 
@@ -57,6 +60,8 @@ The mismatch guard is a deterministic service inside the application layer. It i
 - Apply workspace scoping to tenant-owned data.
 - Provide transactional job claiming and state updates.
 - Hide pgvector query details from application services.
+- Rank compatible image vectors with exact pgvector cosine distance and a stable
+  UUID tie-breaker; apply `LIMIT` in SQL.
 
 ### PostgreSQL and pgvector
 
@@ -123,11 +128,19 @@ set; status and item inspection are available under `/jobs/{id}`.
 ### Article matching
 
 ```text
-article -> embedding -> pgvector ranking -> candidate snapshots
-        -> deterministic guard per candidate
-        -> accepted ranked suggestions OR No confident match
-        -> inspect / approve / reject
+implemented through Phase 7:
+article -> embedding -> exact pgvector ranking -> raw candidate snapshots
+
+future phases:
+raw candidates -> deterministic guard
+               -> accepted suggestions OR No confident match
+               -> inspect / approve / reject
 ```
+
+Pgvector returns cosine distance through `<=>`; the repository orders it ascending
+and limits the query, while the service exposes `1 - distance` so larger response
+scores are always better. Only exact model/revision/dimension matches are compared.
+No approximate index is used for the bounded corpus.
 
 ### Safety boundary
 

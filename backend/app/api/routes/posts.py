@@ -2,9 +2,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import Embeddings, Posts
+from app.api.dependencies import Embeddings, ImageRetrieval, Posts
 from app.schemas.embedding import EmbeddingResponse
 from app.schemas.post import CreatePostRequest, PostResponse
+from app.schemas.retrieval import ImageCandidatesResponse
 from app.services.embeddings import (
     EmbeddingConfigurationError,
     EmbeddingPersistenceError,
@@ -12,8 +13,38 @@ from app.services.embeddings import (
     EmbeddingValidationError,
 )
 from app.services.posts import PostNotFoundError
+from app.services.image_retrieval import (
+    IncompatibleEmbeddingError,
+    InvalidSimilarityError,
+    MissingPostEmbeddingError,
+)
 
 router = APIRouter(prefix="/posts", tags=["posts"])
+
+
+@router.get(
+    "/{post_id}/image-candidates", response_model=ImageCandidatesResponse
+)
+def get_image_candidates(
+    post_id: UUID,
+    service: ImageRetrieval,
+    top_k: int = Query(default=5, ge=1, le=20),
+) -> ImageCandidatesResponse:
+    try:
+        result = service.retrieve(post_id, top_k=top_k)
+    except PostNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (MissingPostEmbeddingError, IncompatibleEmbeddingError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidSimilarityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return ImageCandidatesResponse(
+        post_id=result.post_id,
+        embedding_model=result.embedding_model,
+        embedding_version=result.embedding_version,
+        dimensions=result.dimensions,
+        candidates=result.candidates,
+    )
 
 
 @router.post("", response_model=PostResponse, status_code=status.HTTP_201_CREATED)

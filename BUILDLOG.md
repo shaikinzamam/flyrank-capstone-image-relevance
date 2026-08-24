@@ -234,3 +234,52 @@ This log records how AI assistance was used, which design choices were made, and
 - No real sentence-transformers smoke test has been claimed.
 - Semantic ranking, mismatch guard, recommendations, evaluation, review workflow,
   authentication/tenant work, and frontend remain unimplemented.
+
+## 2026-08-24 — Phase 7 semantic image retrieval
+
+### AI assistance
+
+- Used Codex to implement the retrieval repository/service boundary, typed
+  candidate API, deterministic tests, real pgvector ranking proof, and truthful
+  architecture/evidence updates.
+
+### Decisions
+
+- Add `GET /posts/{post_id}/image-candidates?top_k=5`, with `top_k` constrained
+  to 1–20. It returns raw candidates, never recommendations or guard decisions.
+- Use pgvector cosine distance (`<=>`) ordered ascending and expose
+  `similarity_score = 1 - cosine_distance`; higher response values are better.
+- Filter by exact model, pinned revision, and 384 dimensions in SQL. Rank compatible
+  rows in a mixed library, but return `409` when embeddings exist and none match.
+- Keep low-confidence metadata visible and flagged. Exclude missing metadata in the
+  repository join and schema-invalid metadata in the service rather than returning
+  corrupt candidate snapshots.
+- Resolve equal distances by ascending image UUID. Use exact search and SQL `LIMIT`;
+  do not add HNSW, IVFFlat, FAISS, alias logic, or Python production ranking.
+- Retain a Python cosine fallback only for the SQLite test dialect. Production and
+  PostgreSQL integration paths execute the pgvector query.
+- Do not create AI call logs for retrieval because it invokes no provider.
+
+### Verification performed
+
+- Initial local Phase 2–7 suite: `64 passed, 2 PostgreSQL-only tests skipped in 4.05s`.
+- PostgreSQL-enabled host suite: `67 passed in 6.23s`.
+- Rebuilt Python 3.12 container suite: `67 passed in 3.93s`.
+- Real PostgreSQL known-vector ranking returned fox `0.998618`, wolf `0.919145`,
+  and dog `0.110432`, proving raw retrieval order but not safety.
+- A live API probe returned the same fox/wolf/dog order with complete metadata and
+  the low-confidence wolf flag. Its isolated rows were deleted and absence verified.
+- Live `/health` and `/ready` succeeded; API/PostgreSQL were healthy and the worker
+  was running. The candidate route returned typed `404` behavior for a missing post.
+
+### Problems encountered
+
+- The first live fixture command used JSON text whose quoting was split by the
+  Windows/Docker command boundary. PostgreSQL rejected the statement before any
+  insert. A zero-row check confirmed atomic failure; the retry used SQL JSON
+  constructors, succeeded, and its fixtures were removed after the probe.
+
+### Still not done
+
+- The mismatch guard, final recommendations/refusal, review workflow, evaluation,
+  frontend, and Phase 8+ work remain unimplemented.

@@ -90,6 +90,20 @@ PostgreSQL with pgvector stores both vector types. Retrieval ranks candidate ima
 
 Retrieval produces candidates, not decisions. Every candidate passes through the guard.
 
+Phase 7 implements only the first sentence: `ImageRetrievalService` retrieves the
+configured post embedding and asks PostgreSQL for compatible image embeddings
+ordered by pgvector cosine distance (`<=>`) ascending, then image UUID ascending.
+The API converts distance to similarity with `1 - distance`; higher is always
+better. `top_k` is applied in SQL and bounded to 1–20. Exact search is used, with
+no HNSW, IVFFlat, or FAISS.
+
+Mixed libraries exclude image rows whose model, pinned revision, or dimensions do
+not match the post. A library with embeddings but no compatible image row returns
+a visible conflict instead of an empty, misleading result. Missing metadata is
+excluded by the join, and schema-invalid metadata is excluded by service-level
+validation. Flagged low-confidence metadata remains visible and explicitly
+flagged. None of these candidates is accepted or rejected during retrieval.
+
 ## Mismatch guard
 
 The deterministic guard evaluates signals in this order:

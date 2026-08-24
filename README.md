@@ -6,7 +6,10 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 5 durable background image processing**. The API creates idempotent batch jobs, a separate PostgreSQL-backed worker claims leased items, and validated vision metadata is processed with bounded retries and progress tracking. Embeddings, matching, and evaluation have not started.
+The project is currently at **Phase 7 semantic image retrieval**. Posts and images
+have compatible persisted embeddings, and PostgreSQL/pgvector returns bounded,
+deterministically ordered image candidates by cosine similarity. The mismatch
+guard, final recommendations, review, and evaluation have not started.
 
 ## Problem
 
@@ -51,6 +54,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 4 provider-isolated vision metadata: implemented
 - Phase 5 durable background processing: implemented
 - Phase 6 embedding generation and pgvector persistence: implemented
+- Phase 7 exact semantic retrieval and candidate ranking: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -64,7 +68,8 @@ Three.js and React Three Fiber are intentionally excluded.
 - Expired leases can be reclaimed after worker interruption
 - Deterministic image/post semantic text, content-aware embeddings, and
   `vector(384)` persistence: implemented
-- Semantic ranking, mismatch guard, and recommendations: not started
+- Semantic candidate ranking: implemented
+- Mismatch guard and final recommendations: not started
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
@@ -136,6 +141,7 @@ $post = Invoke-RestMethod -Method Post -ContentType application/json `
   http://localhost:8000/posts
 Invoke-RestMethod -Method Post http://localhost:8000/posts/$($post.id)/embedding
 Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/embedding
+Invoke-RestMethod 'http://localhost:8000/posts/{post_id}/image-candidates?top_k=5'
 ```
 
 Both resource types use `sentence-transformers/all-MiniLM-L6-v2` pinned to model
@@ -152,6 +158,22 @@ Low-confidence image metadata remains `flagged` and is eligible for embedding so
 it can support later observability experiments. Embedding does not make it
 trusted; the future mismatch guard must reject it. Phase 6 uses explicit embedding
 endpoints rather than changing the approved Phase 5 vision-job semantics.
+
+`GET /posts/{post_id}/image-candidates?top_k=5` performs an exact pgvector cosine
+query for the configured model/revision/dimension. Pgvector's cosine distance is
+ordered ascending and exposed as `similarity_score = 1 - cosine_distance`, so a
+higher API score always means a closer vector. Ties use ascending image UUID.
+`top_k` is bounded from 1 through 20, and the SQL query itself applies the limit.
+
+Candidates include their subject, category, caption, tags, vision confidence, and
+low-confidence flag. Low-confidence rows remain visible because this endpoint is
+retrieval only. Mixed-version libraries rank compatible embeddings and exclude
+incompatible rows; a library containing only incompatible image embeddings
+returns `409`. Missing or schema-invalid metadata is excluded from results.
+
+**Phase 7 candidates are not recommendations.** A semantically related but wrong
+subject—such as a wolf for a fox article—may rank highly. No candidate is accepted,
+rejected, or declared safe until the future mismatch guard is implemented.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 
