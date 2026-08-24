@@ -6,7 +6,7 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at the **Phase 2 walking skeleton**. The FastAPI runtime, PostgreSQL connection, Alembic infrastructure, pgvector extension, and health/readiness endpoints exist. No domain feature or evaluation result exists yet.
+The project is currently at **Phase 3 secure image ingestion**. The FastAPI runtime, PostgreSQL connection, Alembic infrastructure, pgvector extension, health/readiness endpoints, and validated local image registration exist. AI processing and matching have not started, and no evaluation result exists yet.
 
 ## Problem
 
@@ -47,9 +47,12 @@ Three.js and React Three Fiber are intentionally excluded.
 
 - Phase 1 design artifacts: complete
 - Phase 2 backend walking skeleton: complete
+- Phase 3 secure JPEG, PNG, and WEBP ingestion: implemented and verified; awaiting approval
+- Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
-- Domain models and application features: not started
+- Image assets remain in `uploaded` status; processing is not implemented
+- AI metadata and matching domain features: not started
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
@@ -70,7 +73,17 @@ Invoke-RestMethod http://localhost:8000/ready
 docker compose exec -T api pytest
 ```
 
-Expected walking-skeleton responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding and evaluation commands remain TODO because those features are outside Phase 2.
+Expected probe responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding and evaluation commands remain TODO because those features are outside the current ingestion phase.
+
+Register an image with multipart form data and inspect registered assets with:
+
+```powershell
+curl.exe -F "file=@C:\path\to\image.png;type=image/png" http://localhost:8000/images
+Invoke-RestMethod http://localhost:8000/images
+Invoke-RestMethod http://localhost:8000/images/{image_id}
+```
+
+Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 
 ## Evaluation
 
@@ -95,4 +108,5 @@ The demo will also show batch progress, structured metadata, explanations, a hum
 - Model confidence is an input signal, not calibrated truth.
 - Thresholds must be tuned against labeled data before they can be considered reliable.
 - Local filesystem image storage is suitable for the capstone but not a distributed production deployment.
+- Authentication and workspace isolation are not implemented yet; the image table is intentionally unscoped until that boundary is designed.
 - The premium frontend is presentation polish, not part of the backend correctness core.

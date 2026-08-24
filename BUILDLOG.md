@@ -61,3 +61,39 @@ This log records how AI assistance was used, which design choices were made, and
 ### Still not done
 
 - No authentication, image handling, AI provider, embedding generation, worker, matching, recommendation, evaluation, or frontend feature exists.
+
+## 2026-08-24 - Phase 3 secure image ingestion
+
+### AI assistance
+
+- Used Codex to implement the `ImageAsset` model and migration, local storage adapter, repository/service boundary, thin image routes, and deterministic endpoint tests.
+- Used Codex to run local and containerized tests, inspect Alembic drift, and exercise the live API against PostgreSQL and the Docker upload volume.
+
+### Decisions
+
+- Stream uploads to a controlled staging directory while enforcing the configured byte limit and computing SHA-256; do not load the whole request into application memory.
+- Accept only declared JPEG, PNG, or WEBP MIME types, then require Pillow's decoded format to agree with the declaration. File extensions do not participate in trust decisions.
+- Run both Pillow verification and full pixel decoding, treat decompression-bomb warnings as errors, and enforce a separate pixel-count safety limit.
+- Store original filenames only as metadata. Final files use generated names beneath a SHA-256 prefix, and API responses expose only the relative storage key.
+- Return `409 Conflict` for byte-identical uploads. A unique SHA-256 database index provides the final concurrency-safe duplicate boundary, and failed inserts remove their staged/promoted files.
+- Keep image status `uploaded` in this phase. The broader status constraint anticipates later processing states without implementing a worker.
+- Do not add a nullable or placeholder workspace identifier before the authentication and tenant boundary is designed.
+
+### Verification performed
+
+- Local endpoint suite: 14 tests passed on Python 3.13.1.
+- Container endpoint suite: 14 tests passed on Python 3.12.14.
+- Alembic upgraded PostgreSQL to revision `0002`; `alembic check` reported no new upgrade operations.
+- Docker reported healthy PostgreSQL and API containers.
+- A live PNG upload returned `201`; list and detail returned the persisted asset; an identical retry returned `409`.
+- PostgreSQL contained one verification row and the Docker upload volume contained one corresponding file under an opaque generated key.
+
+### Problems encountered
+
+- Sandboxed dependency installation could not reach PyPI. The approved network path installed Pillow and python-multipart.
+- The first persistence test passed a JSON UUID string directly to SQLAlchemy's UUID key type. Parsing it to `UUID` fixed the test; the application persistence path was unchanged.
+- The host PowerShell version does not support the newer multipart `-Form` parameter. Direct API verification was rerun successfully with `curl.exe`.
+
+### Still not done
+
+- No authentication, Gemini integration, vision metadata, embeddings, background worker, matching, mismatch guard, recommendations, evaluation, or frontend feature exists.

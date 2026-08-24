@@ -1,2 +1,3 @@
-"""SQLAlchemy domain models will be added in later phases."""
+from app.models.image_asset import ImageAsset, ProcessingStatus
 
+__all__ = ["ImageAsset", "ProcessingStatus"]

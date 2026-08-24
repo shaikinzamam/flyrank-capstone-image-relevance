@@ -12,6 +12,17 @@ These checks establish infrastructure only and do not complete the feature-level
 - PostgreSQL reported pgvector `0.8.6` and Alembic revision `0001`.
 - `pytest` under containerized Python 3.12.14: `3 passed in 0.09s`.
 
+## Phase 3 secure-ingestion verification
+
+- `POST /images` accepted decoded JPEG and PNG fixtures and returned `201` with status `uploaded`.
+- Unsupported MIME types, fake JPEG bytes, MIME/decoded-format disagreement, and oversized bodies returned clean 4xx responses.
+- A byte-identical second upload returned `409`; automated checks confirmed one database row and one stored file.
+- `GET /images` and `GET /images/{image_id}` returned persisted asset metadata; an unknown UUID returned `404`.
+- PostgreSQL applied Alembic revision `0002`, including the `image_assets` table, status/size constraints, and unique SHA-256 index.
+- `alembic check` reported `No new upgrade operations detected.`
+- Docker reported both `db` and `api` healthy. Live upload, list, detail, duplicate, row, and file checks succeeded.
+- `pytest` under containerized Python 3.12.14: `14 passed in 0.49s` on the final rebuild.
+
 ## AI processing
 
 - [ ] **Pending — Structured output:** The vision model produces structured output validated against a schema; invalid responses are never trusted.

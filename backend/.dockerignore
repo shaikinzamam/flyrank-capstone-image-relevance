@@ -5,4 +5,4 @@ __pycache__/
 htmlcov/
 .venv/
 *.egg-info/
-
+uploads/

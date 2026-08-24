@@ -21,6 +21,9 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-flyrank}:${POSTGRES_PASSWORD:-flyrank}@db:5432/${POSTGRES_DB:-flyrank}
+      IMAGE_STORAGE_ROOT: /app/uploads
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
     depends_on:
       db:
         condition: service_healthy
@@ -37,7 +40,9 @@ services:
       retries: 12
     ports:
       - "8000:8000"
+    volumes:
+      - image_uploads:/app/uploads
 
 volumes:
   postgres_data:
-
+  image_uploads:
