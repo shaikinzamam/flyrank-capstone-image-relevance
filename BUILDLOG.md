@@ -396,3 +396,52 @@ This log records how AI assistance was used, which design choices were made, and
 
 - Human review workflow, frontend, broad licensed corpus evaluation, authentication,
   and Phase 10+ remain intentionally unimplemented.
+
+## 2026-08-25 — Phase 10 guarded recommendation review
+
+### Decisions
+
+- Add a separate append-only `recommendation_reviews` table so guard evidence and
+  human editorial judgment remain independent and inspectable.
+- Derive `pending` with no review. Exact retries are idempotent; a different
+  decision or comment appends a record and the latest record becomes current.
+- Permit approve/reject only for persisted `ACCEPTED` candidates. Rejected
+  candidates remain inspectable but return `409` for human actions.
+- Keep `reviewer_id` nullable until authentication exists and do not accept it in
+  the public request body.
+- Add detail, approve, reject, and history endpoints without provider calls,
+  threshold/evaluation changes, or frontend work.
+
+### Verification performed
+
+- Local suite: `92 passed, 5 PostgreSQL-only tests skipped in 13.16s`.
+- Fully enabled PostgreSQL suite: `97 passed in 13.77s`; the live worker was
+  paused during the claim-concurrency test and restored afterward.
+- Final Python 3.12 container suite: `92 passed, 5 skipped in 13.35s`.
+- Live migration `0008 -> 0009`, final drift check, and disposable clean upgrade /
+  downgrade to `0008` / re-upgrade all passed. The disposable database was removed.
+- Live HTTP probes proved pending, approve, reject, retained history, immutable
+  evidence, and mismatch approval blocked with `409`; exact fixtures were removed.
+- Evaluation regression remained top-1 precision `1.0000`, unsafe acceptances `0`.
+- Rebuilt Compose API and PostgreSQL were healthy and the worker was running.
+- Focused tests cover inspection, state transitions, comments, retry policy,
+  append-only history, immutable evidence, clean `404`/`409`, safe refusal, and no
+  AI calls/logs.
+
+### Problems encountered
+
+- One focused assertion expected a scientific alias from another fixture; the
+  shared fixture correctly stores `red fox`, so the test expectation was aligned.
+- The first PostgreSQL command omitted `DATABASE_URL`; rerunning with the same live
+  URL used by Alembic fixed the environment. Adding a review commit initially
+  expired earlier ORM test objects; required evidence was captured before commit.
+- The running worker raced the PostgreSQL claim test; it was temporarily stopped
+  for the isolated rerun and then restored.
+- Windows split an inline SQL probe and PostgreSQL rejected the malformed JSON;
+  the transaction rolled back. An exact temporary SQL file made the probe
+  deterministic and was removed after its fixture cleanup.
+
+### Still not done
+
+- Frontend, authentication, workspace isolation, notifications, roles, approval
+  chains, and collaboration remain intentionally out of scope.

@@ -139,9 +139,18 @@ raw candidates -> deterministic guard
                -> persisted decisions
                -> highest-ranked accepted image OR NO_CONFIDENT_MATCH
 
-future phase:
 persisted recommendation -> inspect / approve / reject
+                         -> append-only human review history
 ```
+
+Phase 10 exposes inspection and review through a narrow application service. The
+latest review is projected as `pending`, `approved`, or `rejected`. Review writes
+never invoke providers or create AI-call logs, and both human actions require the
+persisted guard decision to be `ACCEPTED`.
+
+There is no authentication system yet. The nullable `reviewer_id` column is the
+ownership seam where server-side authenticated identity will attach later; public
+request schemas do not allow clients to assert it.
 
 ### Labeled evaluation
 

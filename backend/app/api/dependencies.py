@@ -25,6 +25,7 @@ from app.services.embeddings import EmbeddingService
 from app.services.posts import PostService
 from app.services.image_retrieval import ImageRetrievalService
 from app.services.recommendations import RecommendationService
+from app.services.recommendation_reviews import RecommendationReviewService
 from app.services.evaluation import EvaluationService
 from app.services.readiness import DatabaseReadinessService
 
@@ -194,6 +195,21 @@ def get_recommendation_service(
 
 Recommendations = Annotated[
     RecommendationService, Depends(get_recommendation_service)
+]
+
+
+def get_recommendation_review_service(
+    session: DatabaseSession,
+) -> RecommendationReviewService:
+    return RecommendationReviewService(
+        RecommendationRepository(session),
+        PostRepository(session),
+        ImageAssetRepository(session),
+    )
+
+
+RecommendationReviews = Annotated[
+    RecommendationReviewService, Depends(get_recommendation_review_service)
 ]
 
 

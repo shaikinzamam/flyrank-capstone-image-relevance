@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -34,6 +34,11 @@ class GuardDecision(StrEnum):
     CATEGORY_MISMATCH = "CATEGORY_MISMATCH"
     REQUIRED_TAG_MISSING = "REQUIRED_TAG_MISSING"
     LOW_SIMILARITY = "LOW_SIMILARITY"
+
+
+class HumanReviewDecision(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
 
 
 class RecommendationRun(Base):
@@ -118,3 +123,43 @@ class Recommendation(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     run: Mapped[RecommendationRun] = relationship(back_populates="recommendations")
+    reviews: Mapped[list["RecommendationReview"]] = relationship(
+        back_populates="recommendation",
+        cascade="all, delete-orphan",
+        order_by="RecommendationReview.created_at",
+    )
+
+
+class RecommendationReview(Base):
+    __tablename__ = "recommendation_reviews"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('approved', 'rejected')",
+            name="ck_recommendation_reviews_decision",
+        ),
+        Index(
+            "ix_recommendation_reviews_recommendation_id_created_at",
+            "recommendation_id",
+            "created_at",
+        ),
+        Index("ix_recommendation_reviews_reviewer_id", "reviewer_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    recommendation_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("recommendations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    decision: Mapped[str] = mapped_column(String(20), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewer_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    recommendation: Mapped[Recommendation] = relationship(back_populates="reviews")

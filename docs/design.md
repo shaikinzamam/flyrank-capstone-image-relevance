@@ -136,8 +136,22 @@ tune them. Subject aliases are centralized in `subject_taxonomy.py`, including
 Each request creates a `recommendation_runs` row with config and embedding identity
 and one `recommendations` row per candidate. Candidate rows retain rank, similarity,
 confidence, metadata flags, expected/candidate taxonomy inputs, required/candidate
-tags, decision/reason code, and explanation. No review fields or AI-call logs are
-created by this deterministic flow.
+tags, decision/reason code, and explanation. No AI-call logs are created by this
+deterministic flow.
+
+## Human review state
+
+Human review is separate from the immutable AI/guard decision. Every persisted
+candidate can be inspected, but only a candidate whose guard decision is
+`ACCEPTED` can be approved or rejected. Its derived initial state is `pending`.
+Actions are stored in append-only `recommendation_reviews` rows with `approved` or
+`rejected`, an optional comment, nullable future `reviewer_id`, and creation time.
+
+The latest row is current. An exact retry is idempotent; changing the decision or
+comment explicitly appends a row and preserves prior history. Human `rejected`
+alongside AI `ACCEPTED` is valid editorial judgment. Review never overwrites rank,
+similarity, confidence, guard decision/reason, or explanation. A guard-rejected row
+cannot receive either action, preventing a mismatch or safe refusal bypass.
 
 ## Durable job design
 

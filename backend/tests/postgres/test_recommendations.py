@@ -10,12 +10,19 @@ from app.models.embedding import ImageEmbedding, PostEmbedding
 from app.models.image_asset import ImageAsset
 from app.models.image_metadata import ImageMetadata
 from app.models.post import Post
-from app.models.recommendation import Recommendation, RecommendationRun
+from app.models.recommendation import (
+    HumanReviewDecision,
+    Recommendation,
+    RecommendationReview,
+    RecommendationRun,
+)
+from app.repositories.image_assets import ImageAssetRepository
 from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.repositories.posts import PostRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.services.image_retrieval import ImageRetrievalService
 from app.services.recommendations import RecommendationService
+from app.services.recommendation_reviews import RecommendationReviewService
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_POSTGRES_PGVECTOR") != "1",
@@ -123,17 +130,54 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
                     .order_by(Recommendation.rank)
                 )
             )
+            original_evidence = (
+                persisted[1].guard_decision,
+                persisted[1].similarity_score,
+                persisted[1].vision_confidence,
+                persisted[1].guard_reason_code,
+                persisted[1].explanation,
+            )
+            persisted_run_status = persisted_run.status if persisted_run else None
+            persisted_decisions = [item.guard_decision for item in persisted]
+            persisted_similarities = [item.similarity_score for item in persisted]
+            reviewed_recommendation_id = persisted[1].id
+            review = RecommendationReviewService(
+                RecommendationRepository(session),
+                PostRepository(session),
+                ImageAssetRepository(session),
+            ).review(
+                reviewed_recommendation_id,
+                HumanReviewDecision.APPROVED,
+                comment="PostgreSQL persistence probe",
+            )
+
+        with Session(engine) as session:
+            persisted_review = session.get(RecommendationReview, review.id)
+            reviewed_recommendation = session.get(
+                Recommendation, reviewed_recommendation_id
+            )
 
         assert result.status == "matched"
         assert result.recommendation is not None
         assert result.recommendation.image_id == fox_id
-        assert persisted_run is not None and persisted_run.status == "matched"
-        assert [item.guard_decision for item in persisted] == [
+        assert persisted_run_status == "matched"
+        assert persisted_decisions == [
             "SUBJECT_MISMATCH",
             "ACCEPTED",
         ]
-        assert persisted[0].similarity_score == pytest.approx(0.93, abs=1e-6)
-        assert persisted[1].similarity_score == pytest.approx(0.90, abs=1e-6)
+        assert persisted_similarities[0] == pytest.approx(0.93, abs=1e-6)
+        assert persisted_similarities[1] == pytest.approx(0.90, abs=1e-6)
+        assert persisted_review is not None
+        assert persisted_review.decision == "approved"
+        assert persisted_review.comment == "PostgreSQL persistence probe"
+        assert reviewed_recommendation is not None
+        assert (
+            reviewed_recommendation.guard_decision,
+            reviewed_recommendation.similarity_score,
+            reviewed_recommendation.vision_confidence,
+            reviewed_recommendation.guard_reason_code,
+            reviewed_recommendation.explanation,
+        ) == original_evidence
     finally:
         with Session(engine) as session:
             session.execute(delete(Post).where(Post.id == post_id))

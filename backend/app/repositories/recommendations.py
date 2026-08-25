@@ -1,6 +1,13 @@
-from sqlalchemy.orm import Session
+from uuid import UUID
 
-from app.models.recommendation import Recommendation, RecommendationRun
+from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload
+
+from app.models.recommendation import (
+    Recommendation,
+    RecommendationReview,
+    RecommendationRun,
+)
 
 
 class RecommendationRepository:
@@ -15,3 +22,19 @@ class RecommendationRepository:
         self._session.commit()
         self._session.refresh(run)
         return run
+
+    def get(self, recommendation_id: UUID) -> Recommendation | None:
+        return self._session.scalar(
+            select(Recommendation)
+            .options(selectinload(Recommendation.reviews))
+            .where(Recommendation.id == recommendation_id)
+        )
+
+    def add_review(
+        self, recommendation: Recommendation, review: RecommendationReview
+    ) -> RecommendationReview:
+        recommendation.reviews.append(review)
+        self._session.add(review)
+        self._session.commit()
+        self._session.refresh(review)
+        return review

@@ -6,10 +6,9 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 9 labeled evaluation**. The guarded
+The project is currently at **Phase 10 human review**. The guarded
 recommendation pipeline now has a reproducible ten-example baseline, persisted
-reports, a CLI, and inspection endpoints. Human review and frontend work have not
-started.
+reports, a CLI, and append-only human review endpoints. Frontend work has not started.
 
 ## Problem
 
@@ -57,6 +56,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 7 exact semantic retrieval and candidate ranking: implemented
 - Phase 8 deterministic mismatch guard, persistence, and refusal: implemented
 - Phase 9 labeled deterministic evaluation and measured metrics: implemented
+- Phase 10 recommendation inspection and guarded human review: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -188,6 +188,25 @@ the fox. If only wolf and dog are available, the response is
 `NO_CONFIDENT_MATCH`, with a readable reason for every rejected candidate. The
 aliases `red fox`, `red_fox`, and `Vulpes vulpes` normalize to the same centralized
 subject concept.
+
+## Human review workflow
+
+`GET /recommendations/{recommendation_id}` exposes the persisted post, candidate
+image, rank, similarity, detected/expected subjects, confidence, guard reason,
+explanation, and current human state. A guard-accepted candidate starts as
+`pending`; `POST /recommendations/{recommendation_id}/approve` and `/reject`
+accept an optional JSON `comment`. `GET /recommendations/{recommendation_id}/reviews`
+returns append-only history.
+
+An identical retry (same decision, comment, and reviewer) is idempotent. A changed
+decision or comment appends a new record and becomes current while older records
+remain inspectable. Guard-rejected candidates return `409` for either human action,
+so review cannot turn `SUBJECT_MISMATCH` or a `NO_CONFIDENT_MATCH` run into a safe
+recommendation. Review never changes the AI evidence and makes no provider call.
+
+Authentication is intentionally deferred. `reviewer_id` is nullable and currently
+returned as `null`; a future authenticated boundary will supply it server-side,
+not accept a claimed reviewer identity from the request body.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 

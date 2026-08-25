@@ -11,7 +11,9 @@ from app.models.processing_job import (
 from app.models.post import Post
 from app.models.recommendation import (
     GuardDecision,
+    HumanReviewDecision,
     Recommendation,
+    RecommendationReview,
     RecommendationRun,
     RecommendationRunStatus,
 )
@@ -31,7 +33,9 @@ __all__ = [
     "Post",
     "PostEmbedding",
     "GuardDecision",
+    "HumanReviewDecision",
     "Recommendation",
+    "RecommendationReview",
     "RecommendationRun",
     "RecommendationRunStatus",
 ]

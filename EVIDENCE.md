@@ -60,6 +60,25 @@ These checks establish infrastructure only and do not complete the feature-level
 - Live `POST /evaluation/run`, `GET /evaluation/latest`, and by-ID retrieval agreed
   on the same run and measured metrics.
 
+## Phase 10 guarded-review verification
+
+- Local suite: `92 passed, 5 PostgreSQL-only tests skipped in 13.16s`.
+- Fully enabled PostgreSQL suite: `97 passed in 13.77s`, including append-only
+  review persistence and immutable recommendation evidence in PostgreSQL.
+- Final Python 3.12 container suite: `92 passed, 5 PostgreSQL-only tests skipped
+  in 13.35s`.
+- Live database upgraded forward only from `0008` to `0009`; `alembic check`
+  reported no drift. A disposable PostgreSQL database passed clean upgrade,
+  `0009 -> 0008` downgrade, re-upgrade, and drift check, then was removed.
+- Live HTTP probe inspected a red fox at similarity `0.90`, confidence `0.95`,
+  guard `ACCEPTED`, and review `pending`; approval changed review to `approved`
+  without changing evidence. A later rejection produced retained history
+  `[approved, rejected]`.
+- Live gray-wolf approval returned `409` for `SUBJECT_MISMATCH`. The uniquely
+  identified live fixture and temporary SQL file were removed afterward.
+- Evaluation regression output remained top-1 precision `1.0000` with zero unsafe
+  acceptances. Rebuilt API/PostgreSQL were healthy and the worker was restored.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
@@ -95,11 +114,13 @@ These checks establish infrastructure only and do not complete the feature-level
 
 ## Backend
 
-- [ ] **Partial — Persistence:** Migrated models now exist for images, metadata,
-  posts, embeddings, recommendation runs, and candidate decisions. Review records
-  remain pending.
+- [x] **Phase 10 evidence — Review persistence:** Migration `0009` adds constrained,
+  indexed, append-only reviews with a recommendation foreign key and nullable
+  future reviewer identity.
 - [ ] **Pending — API validation:** Endpoint input is validated and bad requests produce clean 4xx responses.
-- [ ] **Pending — Review workflow:** A user can inspect why a suggestion was made and approve or reject it.
+- [x] **Phase 10 evidence — Review workflow:** Typed endpoints inspect evidence,
+  approve/reject accepted candidates, persist comments, expose state/history, and
+  reject safety-boundary bypasses with `409`.
 - [ ] **Pending — Authorization:** Minimum real authentication and authorization protect non-public endpoints.
 - [ ] **Pending — Tenant isolation:** Cross-workspace access is prevented and tested.
 - [x] **Phase 5 evidence — Idempotency:** Reusing an idempotency key with the same image set returns the same job; using it with a different set returns `409`. Job/image uniqueness and metadata upsert constraints prevent duplicate durable rows.
@@ -132,6 +153,10 @@ These checks establish infrastructure only and do not complete the feature-level
   acceptances under unchanged `phase8-v1`.
 - [x] **Phase 9 evidence — README metric:** CLI output and README both report
   top-1 precision `1.0000`, defined as `3 / (3 + 0)` issued recommendations.
+- [x] **Phase 10 evidence — Review tests:** Tests prove pending, approve, reject,
+  comments, idempotent retry, conflicting append-only history, missing `404`,
+  rejected-candidate `409`, immutable evidence, no provider/log calls, and no
+  approvable candidate for `NO_CONFIDENT_MATCH`.
 - [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.
 - [ ] **Pending — Submission pack:** All required files are complete and the architecture diagram is current.
 
