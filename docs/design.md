@@ -254,3 +254,20 @@ under unchanged `phase8-v1` produced `3/3` correct issued recommendations,
 - A tiny dataset can overfit thresholds and inflate metrics.
 - Corpus licensing and repository size must remain reproducible and auditable.
 - Frontend polish can distract from acceptance-probe correctness.
+
+## Phase 12 hardening boundaries
+
+Stored image delivery now requires the resolved file to remain inside the
+controlled root and to match the database's exact byte size, SHA-256, MIME type,
+and decoded supported image format. Upload validation continues to enforce
+streamed byte and decoded-pixel limits.
+
+Browser access uses a comma-separated list of explicit HTTP(S) origins. Wildcard
+origins are rejected, credentials are disabled, and only GET, POST, OPTIONS, and
+the `Content-Type` request header are allowed.
+
+The deterministic evaluator seed uses generated, visibly labeled synthetic
+assets and a seed-only known-vector fixture. It makes no third-party licensing
+claim and does not alter production providers, thresholds, guard behavior, or
+evaluation labels. Repeated seeds replace only the reserved Phase 12 filename and
+post-title prefixes.

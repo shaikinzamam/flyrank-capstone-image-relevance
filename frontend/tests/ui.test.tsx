@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import axe from "axe-core";
 import { describe, expect, it, vi } from "vitest";
 import { LandingHero } from "@/components/landing/LandingHero";
 import { ThreeDImageCard, calculateTilt } from "@/components/images/ThreeDImageCard";
@@ -94,5 +95,18 @@ describe("Phase 11 interface", () => {
     expect(calculateTilt(1, 0, true, false)).toEqual({ rotateX: 0, rotateY: 0 });
     expect(calculateTilt(1, 0, false, true)).toEqual({ rotateX: 0, rotateY: 0 });
     expect(calculateTilt(1, 0, false, false)).toEqual({ rotateX: 4, rotateY: 4 });
+  });
+
+  it("has no detectable accessibility violations in core static views", async () => {
+    const { container, rerender } = render(<LandingHero />);
+    const options = { rules: { "color-contrast": { enabled: false } } };
+    expect((await axe.run(container, options)).violations).toEqual([]);
+
+    rerender(<ReviewPanel recommendation={detail} history={[]} onReviewed={vi.fn()} />);
+    expect((await axe.run(container, options)).violations).toEqual([]);
+
+    const report = { total_examples: 10, correct_top1: 3, correct_no_confident_match: 7, unsafe_acceptance_count: 0, top1_precision: 1, unsafe_rejection_recall: 1, dataset_version: "evaluation-v1", config_version: "phase8-v1", examples: [] } as unknown as EvaluationRun;
+    rerender(<EvaluationDashboardView report={report} />);
+    expect((await axe.run(container, options)).violations).toEqual([]);
   });
 });

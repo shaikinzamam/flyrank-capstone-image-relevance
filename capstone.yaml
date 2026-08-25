@@ -1,15 +1,14 @@
 name: flyrank-capstone-image-relevance
 title: Image Relevance & Auto-Tagging
 subtitle: AI Image Understanding & Content Matching Engine
-phase: labeled_evaluation
-implementation_status: phase_9_complete
+phase: final_hardening
+implementation_status: phase_12_complete
 
-# `run` and `test` were verified in Phase 2. Seeding remains planned and must
-# not be treated as executable until the corpus workflow exists.
 run: "docker compose up --build -d"
-seed: "TODO_PHASE_2_PLUS: docker compose exec api python -m scripts.seed"
+seed: "docker compose exec -T api python -m scripts.seed"
 test: "docker compose exec -T api pytest"
 base_url: http://localhost:8000
+frontend_url: http://localhost:3000
 
 evaluator_endpoints:
   health:
@@ -23,11 +22,11 @@ evaluator_endpoints:
   process_images:
     method: POST
     path: /images/process
-    status: planned
+    status: available
   job_status:
     method: GET
     path: /jobs/{job_id}
-    status: planned
+    status: available
   post_recommendations:
     method: POST
     path: /posts/{post_id}/recommendations
@@ -35,15 +34,15 @@ evaluator_endpoints:
   recommendation_detail:
     method: GET
     path: /recommendations/{recommendation_id}
-    status: planned
+    status: available
   approve_recommendation:
     method: POST
     path: /recommendations/{recommendation_id}/approve
-    status: planned
+    status: available
   reject_recommendation:
     method: POST
     path: /recommendations/{recommendation_id}/reject
-    status: planned
+    status: available
   run_evaluation:
     method: POST
     path: /evaluation/run
@@ -52,7 +51,3 @@ evaluator_endpoints:
     method: GET
     path: /evaluation/latest
     status: available
-  ai_usage:
-    method: GET
-    path: /metrics/ai-usage
-    status: planned

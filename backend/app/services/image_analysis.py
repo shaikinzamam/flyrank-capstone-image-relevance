@@ -96,6 +96,7 @@ class ImageAnalysisService:
                 asset.storage_key,
                 expected_mime_type=asset.mime_type,
                 expected_sha256=asset.sha256,
+                expected_byte_size=asset.byte_size,
             )
         except InvalidStoredImageError as exc:
             asset.processing_status = ProcessingStatus.FAILED.value

@@ -100,6 +100,42 @@ These checks establish infrastructure only and do not complete the feature-level
 - Docker built the standalone Next.js image and reported database, API, and
   frontend healthy; the worker is restored after database concurrency tests.
 
+## Phase 12 final-hardening verification
+
+- The exact `capstone.yaml` run, seed, and test commands executed successfully.
+  `python -m scripts.seed` generated only clearly labeled synthetic PNG fixtures,
+  passed them through upload validation and metadata/embedding services, and
+  emitted a reproducible JSON manifest.
+- Seed evidence ranked gray wolf `0.93`, red fox `0.90`, and domestic dog `0.82`.
+  The persisted guard rejected wolf with `SUBJECT_MISMATCH`, accepted fox at rank
+  2, permitted append-only human review only for the fox, and persisted a separate
+  wolf/dog-only `NO_CONFIDENT_MATCH` run.
+- A second exact seed invocation safely replaced only its reserved fixtures and
+  reproduced the same ranks, decisions, review, refusal, and evaluation metrics.
+- Final backend results: local `102 passed, 5 skipped in 17.64s`; fully enabled
+  PostgreSQL `107 passed in 17.63s`; Python 3.12 container `102 passed, 5 skipped
+  in 17.19s`. The PostgreSQL matrix covers pgvector ranking, concurrent claiming,
+  evaluation persistence, and immutable reviewed recommendations.
+- Final frontend results: 11 Vitest checks passed, including axe-core checks of
+  representative landing, review, and evaluation views; strict TypeScript,
+  ESLint, and the six-route optimized production build passed.
+- `evaluation-v1` remained 10 examples, 3 correct top-1, 0 incorrect top-1, 7
+  correct refusals, 0 incorrect refusals, 0 unsafe acceptances, and top-1
+  precision `1.0000`. Alembic reported revision `0009 (head)` and no drift.
+- A volume-preserving `docker compose down` followed by the exact documented
+  `docker compose up --build -d` completed without startup races. Database, API,
+  and frontend became healthy; the worker started and remained running.
+- Live probes returned `200` for health, readiness, all primary frontend routes,
+  recommendation detail, evaluation, and validated PNG content. Rejected approval
+  returned `409`, malformed UUID returned `422`, and CORS returned only the
+  configured localhost origin with GET/POST/OPTIONS and no credentials.
+- Stored-image tests now prove controlled-root enforcement plus trusted MIME,
+  SHA-256, decoded image, maximum size/pixels, and exact database byte-size checks.
+  Startup/runtime logs contained no stack traces, credentials, keys, or warnings.
+- Edge device metrics verified every main page at 375, 768, 1024, and 1440 CSS
+  pixels. Each measured document width stayed within its viewport; the 375 pass
+  exposed the mobile menu and retained zero horizontal overflow.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.

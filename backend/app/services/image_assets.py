@@ -96,5 +96,6 @@ class ImageAssetService:
             asset.storage_key,
             expected_mime_type=asset.mime_type,
             expected_sha256=asset.sha256,
+            expected_byte_size=asset.byte_size,
         )
         return asset, path

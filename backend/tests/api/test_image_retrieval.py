@@ -17,6 +17,16 @@ SUBJECTS = {
 }
 
 
+def test_oversized_post_body_is_rejected(image_api: ImageApiContext) -> None:
+    response = image_api.client.post(
+        "/posts",
+        json={"title": "Bounded post", "body": "x" * 50_001},
+    )
+
+    assert response.status_code == 422
+    assert "traceback" not in response.text.lower()
+
+
 def vector(first: float, second: float = 0.0) -> list[float]:
     return [first, second] + [0.0] * 382
 

@@ -54,6 +54,7 @@ export function ThreeDImageCard(props: ThreeDImageCardProps) {
     <motion.article
       onPointerMove={tilt}
       onPointerLeave={reset}
+      onPointerCancel={reset}
       style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
       className="glass group relative h-full overflow-hidden rounded-2xl"
       whileHover={reduced ? undefined : { y: -4 }}
@@ -73,5 +74,5 @@ export function ThreeDImageCard(props: ThreeDImageCardProps) {
       </div>
     </motion.article>
   );
-  return props.id ? <Link href={`/images/${props.id}`} className="block h-full [perspective:900px]">{content}</Link> : <div className="h-full [perspective:900px]">{content}</div>;
+  return props.id ? <Link href={`/images/${props.id}`} onBlur={reset} className="block h-full rounded-2xl [perspective:900px]">{content}</Link> : <div className="h-full [perspective:900px]">{content}</div>;
 }

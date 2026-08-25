@@ -29,7 +29,7 @@ export function HeroCardStack() {
             <div className="mt-5 grid h-44 place-items-center rounded-2xl border border-white/8 bg-[radial-gradient(circle_at_50%_35%,rgba(111,227,193,.18),transparent_55%),linear-gradient(145deg,#172833,#0b161e)]">
               <span className="display text-5xl font-bold text-white/90">{card.subject.split(" ").map((word) => word[0]).join("")}</span>
             </div>
-            <h3 className="display mt-5 text-2xl font-bold">{card.subject}</h3>
+            <p className="display mt-5 text-2xl font-bold">{card.subject}</p>
             <p className="muted mt-1 text-sm">Deterministic subject evidence</p>
           </div>
         ))}

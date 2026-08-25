@@ -158,6 +158,7 @@ class LocalImageStorage:
         *,
         expected_mime_type: str,
         expected_sha256: str,
+        expected_byte_size: int,
     ) -> Path:
         path = (self.root / Path(storage_key)).resolve()
         if not path.is_relative_to(self.root) or not path.is_file():
@@ -168,6 +169,8 @@ class LocalImageStorage:
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if digest != expected_sha256:
             raise InvalidStoredImageError("Stored image integrity check failed")
+        if byte_size != expected_byte_size:
+            raise InvalidStoredImageError("Stored image no longer passes validation")
         try:
             self.validate(
                 StagedUpload(path=path, byte_size=byte_size, sha256=digest),

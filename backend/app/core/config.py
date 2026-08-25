@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import Field, PositiveInt, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -117,6 +118,26 @@ class Settings(BaseSettings):
     @classmethod
     def empty_optional_numbers_are_unset(cls, value: object) -> object:
         return None if value == "" else value
+
+    @field_validator("cors_allowed_origins")
+    @classmethod
+    def validate_cors_origins(cls, value: str) -> str:
+        origins = [origin.strip().rstrip("/") for origin in value.split(",")]
+        if not origins or any(not origin or origin == "*" for origin in origins):
+            raise ValueError("CORS_ALLOWED_ORIGINS must list explicit origins")
+        for origin in origins:
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS entries must be HTTP(S) origins"
+                )
+        return ",".join(origins)
 
     @model_validator(mode="after")
     def validate_worker_configuration(self) -> "Settings":

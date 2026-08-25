@@ -56,6 +56,12 @@ function humanizeApiError(status: number, detail: string): string {
   if (status === 409 && detail.toLowerCase().includes("embedding")) {
     return "Generate the post embedding before searching for images.";
   }
+  if (status === 404 && detail.toLowerCase().includes("evaluation")) {
+    return "No evaluation run exists yet. Run the deterministic evaluation, then try again.";
+  }
+  if (status === 404 && detail.toLowerCase().includes("recommendation")) {
+    return "This recommendation could not be found. Check the review link and try again.";
+  }
   if (status === 404) return detail || "The requested record was not found.";
   if (status === 422) return "Please check the highlighted input and try again.";
   if ([500, 503, 504].includes(status)) {

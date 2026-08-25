@@ -487,5 +487,70 @@ This log records how AI assistance was used, which design choices were made, and
 
 ### Still not done
 
-- Phase 12 final polish/deployment, authentication, workspace isolation,
-  notifications, roles, and collaboration remain out of scope.
+- At the Phase 11 close, final hardening was still pending; authentication,
+  workspace isolation, notifications, roles, and collaboration remained out of
+  scope and are still not claimed.
+
+## 2026-08-25 — Phase 12 final hardening and demo readiness
+
+### Audits and fixes
+
+- Replaced stale Phase 2 `capstone.yaml` seed/status placeholders with the exact
+  verified run, seed, test, URL, and endpoint values.
+- Added a prefix-scoped, rerunnable synthetic demo seed. It creates visibly
+  labeled generated images and known vectors without downloading a model or
+  claiming third-party image provenance; it persists matching, refusal, review,
+  and evaluation evidence.
+- Closed a stored-image integrity gap by comparing the served file's actual byte
+  size with the trusted database value in addition to path, maximum size, hash,
+  MIME, and decode checks. Added a regression test.
+- Rejected wildcard/malformed CORS origins at configuration load, retained
+  credentials-off behavior, and passed the explicit origin into Compose.
+- Bounded post bodies at 50,000 characters and added clean malformed-UUID and
+  oversized-body checks. No guard threshold, label, or recommendation rule changed.
+- Added a no-candidate retrieval state, clearer missing evaluation/recommendation
+  errors, live progress announcements, input bounds/hints, pointer-cancel and
+  keyboard-blur tilt resets, and narrower mobile candidate grids.
+- Added axe-core checks. Axe found skipped heading levels in decorative hero cards;
+  converting those labels from headings to styled text fixed the semantic issue.
+
+### Verification performed
+
+- Local backend: `102 passed, 5 skipped in 17.64s`; PostgreSQL-enabled: `107
+  passed in 17.63s`; Python 3.12 container: `102 passed, 5 skipped in 17.19s`.
+- Frontend: 11 tests including axe passed; strict TypeScript, ESLint, and the
+  optimized Next.js production build passed with all six product routes.
+- Exact demo seed proved wolf `0.93 -> SUBJECT_MISMATCH`, fox `0.90 -> ACCEPTED`,
+  dog `0.82`, review transitions, blocked rejected approval (`409`), and a
+  wolf/dog-only `NO_CONFIDENT_MATCH`.
+- A second exact seed invocation reproduced the manifest and confirmed the
+  prefix-scoped cleanup is rerunnable without touching unrelated records.
+- `evaluation-v1` remained 10/3/0/7/0 with zero unsafe acceptances and precision
+  `1.0000`. Alembic remained at `0009` with no drift.
+- A volume-preserving clean Compose down/up-build passed. Database/API/frontend
+  were healthy, worker running, primary routes `200`, validated image bytes `200`,
+  malformed UUID `422`, and explicit-origin CORS preflight `200`.
+- Headless visual checks covered tablet/laptop/desktop widths. Edge's ordinary
+  screenshot mode has a minimum window width, so the 375 pass used an explicit
+  375-CSS-pixel DevTools device metric: all six pages reported content width at or
+  below the viewport, the mobile menu was visible, and no horizontal overflow
+  occurred. Touch fallbacks and overflow constraints were also code-audited.
+- Runtime logs were concise normal startup/access output with no secrets, stack
+  traces, repeated warnings, or fake success messages.
+
+### Problems encountered
+
+- The first seed post matched an image-vector substring in `Expected subject`;
+  requiring image semantic text to begin with `Subject:` restored the exact known
+  ranking and received a regression test.
+- The seed report initially read evaluation `id`; the public schema correctly
+  calls it `run_id`. The serializer was corrected and the exact command rerun.
+- Combining elevated Docker operations with local pytest created an inaccessible
+  Windows temp directory. PostgreSQL tests themselves passed, and the complete
+  matrix was rerun normally with an explicit repository-local temporary path;
+  generated temporary directories were removed and the worker restored.
+
+### Intentionally not added
+
+- No authentication, tenancy, object storage, Kubernetes, Redis, Celery, GraphQL,
+  Three.js, new production model provider, or Phase 13 packaging work.

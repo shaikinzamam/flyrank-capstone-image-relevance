@@ -202,3 +202,9 @@ Docker Compose starts PostgreSQL, FastAPI, the image-processing worker, and the
 standalone Next.js production server. The deterministic Compose default uses the
 fake vision provider; Gemini remains explicit configuration. Redis, Celery,
 Three.js, and React Three Fiber are not planned.
+
+The Phase 12 evaluator seed adds no runtime service. It executes inside the API
+container, follows the existing service/repository boundaries, writes generated
+demo images to the controlled upload volume, and persists known-vector evidence
+to PostgreSQL. The frontend remains a presentation client; FastAPI remains the
+authority for retrieval, guard decisions, and human-review permission.

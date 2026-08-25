@@ -6,9 +6,9 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 11 frontend**. A responsive Next.js interface
-now visualizes the image library, guided matching, immutable guard evidence,
-human review history, and bounded evaluation metrics.
+The project is currently at **Phase 12 final hardening**. The complete backend and
+responsive frontend have a reproducible synthetic demo seed, verified evaluator
+commands, explicit security/configuration boundaries, and a final test matrix.
 
 ## Problem
 
@@ -58,6 +58,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 9 labeled deterministic evaluation and measured metrics: implemented
 - Phase 10 recommendation inspection and guarded human review: implemented
 - Phase 11 responsive Next.js product interface: implemented
+- Phase 12 hardening and deterministic demo readiness: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -73,27 +74,64 @@ Three.js and React Three Fiber are intentionally excluded.
   `vector(384)` persistence: implemented
 - Semantic candidate ranking: implemented
 - Mismatch guard and final recommendations: implemented
-- Corpus collection: not started
+- Licensed photographic corpus collection: not started; the demo uses clearly
+  labeled, programmatically generated synthetic images with no licensing claim
 - Evaluation execution: implemented with a versioned deterministic baseline
 - Frontend landing, images, matching, review, and evaluation routes: implemented
 
 ## Setup
 
-The complete local stack can be started from the repository root with:
+### Prerequisites
+
+- Git
+- Docker Desktop or Docker Engine with Compose v2
+- At least 8 GB RAM available to Docker for the Python/ML image build
+- Python 3.12 and Node.js 24 only when running services outside Docker
+
+Docker is the reproducible path; global Python and Node packages are not used.
+From a clean machine:
 
 ```powershell
+git clone <repository-url>
+cd "Image Relevance & Auto-Tagging"
+Copy-Item .env.example .env
+# Replace POSTGRES_PASSWORD before any non-local deployment.
 docker compose up --build -d
+docker compose ps
+docker compose exec -T api alembic current
+docker compose exec -T api python -m scripts.seed
+docker compose exec -T api pytest
 ```
 
-The API entrypoint applies Alembic migrations before starting Uvicorn. Verify it with:
+The API entrypoint automatically runs `alembic upgrade head` before Uvicorn, so
+the explicit `alembic current` command verifies migration state rather than
+applying a second migration. Open `http://localhost:3000`; the API is available
+at `http://localhost:8000`.
+
+Verify health independently:
 
 ```powershell
 Invoke-RestMethod http://localhost:8000/health
 Invoke-RestMethod http://localhost:8000/ready
-docker compose exec -T api pytest
 ```
 
-Expected probe responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding remains future work.
+Expected responses are `{"status":"ok"}` and
+`{"status":"ready","database":"reachable"}`.
+
+### Environment policy
+
+Every application variable is listed in [.env.example](.env.example). Compose
+defaults to the credential-free deterministic vision fixture. Gemini is opt-in:
+set `VISION_PROVIDER=gemini`, `GEMINI_API_KEY`, a conservative per-call estimate,
+and a total budget. `NEXT_PUBLIC_API_BASE_URL` is intentionally public and is
+baked into the browser bundle at frontend build time; database credentials and
+Gemini keys are server-only. `CORS_ALLOWED_ORIGINS` is a comma-separated explicit
+HTTP(S) origin list; wildcard origins are rejected and credentials are disabled.
+
+For production, replace the development database password, restrict published
+ports/origins, terminate TLS at a trusted proxy, use durable object storage, and
+add authentication/workspace authorization. Those deployment capabilities are
+not claimed by this capstone.
 
 Open `http://localhost:3000` for the frontend. Browser API calls use
 `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000`); allowed browser
@@ -106,6 +144,16 @@ cd frontend
 Copy-Item .env.example .env.local
 npm.cmd install
 npm.cmd run dev
+```
+
+Standalone backend development requires Python 3.12:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".\backend[dev]"
+Set-Location backend
+..\.venv\Scripts\python.exe -m alembic upgrade head
+..\.venv\Scripts\python.exe -m pytest
 ```
 
 Production UI values come from backend responses. Image previews use
@@ -243,6 +291,12 @@ mismatch. Run the official deterministic baseline from `backend`:
 ..\.venv\Scripts\python.exe -m scripts.evaluate
 ```
 
+The clean Docker equivalent is:
+
+```powershell
+docker compose exec -T api python -m scripts.evaluate
+```
+
 The command persists an `EvaluationRun` and writes generated machine-readable
 output to the ignored `backend/artifacts/evaluation/latest.json`. Equivalent API
 operations are `POST /evaluation/run`, `GET /evaluation/latest`, and
@@ -274,13 +328,40 @@ general-world model quality. Thresholds were not changed after seeing the result
 
 ## Demo scenario
 
-```text
-Red fox article -> fox recommended.
+Run this exact deterministic path after the stack is healthy:
 
-Correct fox unavailable -> wolf candidate rejected -> No confident match.
+```powershell
+docker compose exec -T api python -m scripts.seed
 ```
 
-The demo will also show batch progress, structured metadata, explanations, a human approval/rejection trail, real evaluation output, and per-call AI cost records.
+The command replaces only records whose names use the reserved Phase 12 demo
+prefix. It generates three visibly labeled synthetic PNGs, passes them through
+the same upload validation and metadata/embedding services, and prints a JSON
+manifest. The manifest proves raw rank `gray wolf 0.93`, `red fox 0.90`, and
+`domestic dog 0.82`; the guard rejects wolf with `SUBJECT_MISMATCH`, accepts fox,
+persists a human review, then temporarily excludes the fox embedding to persist a
+wolf/dog-only `NO_CONFIDENT_MATCH`. It also runs and persists `evaluation-v1`.
+
+UI walkthrough, using IDs printed by the seed command:
+
+1. Open `http://localhost:3000/images`; inspect fox, wolf, and dog metadata and
+   embedding state. Click a card for validated image bytes and full auto-tags.
+2. Open `http://localhost:3000/match` to inspect the guided create → embed → raw
+   retrieval → guard workflow. The deterministic raw evidence is also printed by
+   the seed manifest so the required ranking never depends on presentation timing.
+3. Open `http://localhost:3000/recommendations/<accepted_recommendation_id>`.
+   Verify the wolf rejection/fox acceptance evidence, enter a comment, and use
+   Reject or Approve; the append-only timeline updates while evidence stays fixed.
+4. Open a value from `no_match_recommendation_ids` to verify that a guard-rejected
+   candidate has no approval control. The manifest's `no_match_reason` is
+   `NO_CONFIDENT_MATCH` for the wolf/dog-only run.
+5. Open `http://localhost:3000/evaluation`; verify 10 examples, 3 correct top-1,
+   7 correct refusals, 0 unsafe acceptances, and precision `1.0000`.
+
+To demonstrate the durable worker separately, upload a valid local JPEG/PNG/WEBP,
+submit its returned UUID to `POST /images/process`, and poll the job commands in
+the earlier processing section. The Compose default uses a deterministic fake
+vision response and incurs no external cost.
 
 ## Limitations
 

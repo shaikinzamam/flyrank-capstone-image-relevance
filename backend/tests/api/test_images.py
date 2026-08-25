@@ -243,6 +243,29 @@ def test_tampered_stored_image_content_returns_410(
     assert "integrity" in response.json()["detail"]
 
 
+def test_stored_image_size_must_match_trusted_database_state(
+    image_api: ImageApiContext,
+) -> None:
+    created = upload(
+        image_api,
+        filename="size-mismatch.png",
+        content=image_bytes("PNG"),
+        mime_type="image/png",
+    ).json()
+    with image_api.session_factory() as session:
+        asset = session.get(ImageAsset, UUID(created["id"]))
+        assert asset is not None
+        asset.byte_size += 1
+        session.commit()
+
+    response = image_api.client.get(f"/images/{created['id']}/content")
+
+    assert response.status_code == 410
+    assert response.json() == {
+        "detail": "Stored image no longer passes validation"
+    }
+
+
 def test_missing_image_returns_404(image_api: ImageApiContext) -> None:
     response = image_api.client.get(f"/images/{uuid4()}")
 
