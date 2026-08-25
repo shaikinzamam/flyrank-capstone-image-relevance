@@ -2,10 +2,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import Embeddings, ImageRetrieval, Posts
+from app.api.dependencies import Embeddings, ImageRetrieval, Posts, Recommendations
 from app.schemas.embedding import EmbeddingResponse
 from app.schemas.post import CreatePostRequest, PostResponse
 from app.schemas.retrieval import ImageCandidatesResponse
+from app.schemas.recommendation import RecommendationResponse
 from app.services.embeddings import (
     EmbeddingConfigurationError,
     EmbeddingPersistenceError,
@@ -20,6 +21,24 @@ from app.services.image_retrieval import (
 )
 
 router = APIRouter(prefix="/posts", tags=["posts"])
+
+
+@router.post(
+    "/{post_id}/recommendations", response_model=RecommendationResponse
+)
+def create_recommendation(
+    post_id: UUID,
+    service: Recommendations,
+    top_k: int = Query(default=5, ge=1, le=20),
+) -> RecommendationResponse:
+    try:
+        return service.create(post_id, top_k=top_k)
+    except PostNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (MissingPostEmbeddingError, IncompatibleEmbeddingError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except InvalidSimilarityError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get(

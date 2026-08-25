@@ -53,6 +53,9 @@ The mismatch guard is a deterministic service inside the application layer. It i
 - Phase 7 `ImageRetrievalService` loads the configured post vector, enforces
   embedding compatibility, converts cosine distance to similarity, and produces
   typed candidate snapshots. It makes no guard decision.
+- Phase 8 `RecommendationService` requests raw ranked records, evaluates every row
+  through the pure `MismatchGuard`, persists a run plus candidate snapshots, and
+  selects the first `ACCEPTED` rank or returns `NO_CONFIDENT_MATCH`.
 
 ### Repositories
 
@@ -128,13 +131,16 @@ set; status and item inspection are available under `/jobs/{id}`.
 ### Article matching
 
 ```text
-implemented through Phase 7:
+raw retrieval (Phase 7, unchanged):
 article -> embedding -> exact pgvector ranking -> raw candidate snapshots
 
-future phases:
+guarded recommendation (Phase 8):
 raw candidates -> deterministic guard
-               -> accepted suggestions OR No confident match
-               -> inspect / approve / reject
+               -> persisted decisions
+               -> highest-ranked accepted image OR NO_CONFIDENT_MATCH
+
+future phase:
+persisted recommendation -> inspect / approve / reject
 ```
 
 Pgvector returns cosine distance through `<=>`; the repository orders it ascending

@@ -6,10 +6,10 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 7 semantic image retrieval**. Posts and images
-have compatible persisted embeddings, and PostgreSQL/pgvector returns bounded,
-deterministically ordered image candidates by cosine similarity. The mismatch
-guard, final recommendations, review, and evaluation have not started.
+The project is currently at **Phase 8 guarded recommendations**. PostgreSQL/pgvector
+still returns raw semantic candidates, while a separate deterministic guard now
+accepts the highest-ranked safe candidate or explicitly returns
+`NO_CONFIDENT_MATCH`. Human review and evaluation have not started.
 
 ## Problem
 
@@ -55,6 +55,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 5 durable background processing: implemented
 - Phase 6 embedding generation and pgvector persistence: implemented
 - Phase 7 exact semantic retrieval and candidate ranking: implemented
+- Phase 8 deterministic mismatch guard, persistence, and refusal: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -69,7 +70,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Deterministic image/post semantic text, content-aware embeddings, and
   `vector(384)` persistence: implemented
 - Semantic candidate ranking: implemented
-- Mismatch guard and final recommendations: not started
+- Mismatch guard and final recommendations: implemented
 - Corpus collection: not started
 - Evaluation execution: not started
 - Frontend: postponed until backend acceptance probes pass
@@ -137,11 +138,12 @@ Create and embed a post, or explicitly embed schema-valid image metadata:
 
 ```powershell
 $post = Invoke-RestMethod -Method Post -ContentType application/json `
-  -Body '{"title":"Winter foxes","body":"A red fox in snow.","expected_subject":"red fox","expected_category":"animal"}' `
+  -Body '{"title":"Winter foxes","body":"A red fox in snow.","expected_subject":"red fox","expected_category":"animal","required_tags":["snow"]}' `
   http://localhost:8000/posts
 Invoke-RestMethod -Method Post http://localhost:8000/posts/$($post.id)/embedding
 Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/embedding
 Invoke-RestMethod 'http://localhost:8000/posts/{post_id}/image-candidates?top_k=5'
+Invoke-RestMethod -Method Post 'http://localhost:8000/posts/{post_id}/recommendations?top_k=5'
 ```
 
 Both resource types use `sentence-transformers/all-MiniLM-L6-v2` pinned to model
@@ -156,7 +158,7 @@ a separately constrained row. Each actual embedding call is logged with provider
 
 Low-confidence image metadata remains `flagged` and is eligible for embedding so
 it can support later observability experiments. Embedding does not make it
-trusted; the future mismatch guard must reject it. Phase 6 uses explicit embedding
+trusted; the mismatch guard rejects it. Phase 6 uses explicit embedding
 endpoints rather than changing the approved Phase 5 vision-job semantics.
 
 `GET /posts/{post_id}/image-candidates?top_k=5` performs an exact pgvector cosine
@@ -171,9 +173,20 @@ retrieval only. Mixed-version libraries rank compatible embeddings and exclude
 incompatible rows; a library containing only incompatible image embeddings
 returns `409`. Missing or schema-invalid metadata is excluded from results.
 
-**Phase 7 candidates are not recommendations.** A semantically related but wrong
-subject—such as a wolf for a fox article—may rank highly. No candidate is accepted,
-rejected, or declared safe until the future mismatch guard is implemented.
+**Phase 7 candidates are not recommendations.** Raw retrieval may rank a wolf
+highly for a fox article because the concepts are semantically related. Phase 8's
+`POST /posts/{post_id}/recommendations?top_k=5` evaluates those same ranked rows
+without invoking any provider. It rejects hard subject/category conflicts,
+invalid or low-confidence metadata, missing required tags, and scores below the
+versioned provisional thresholds. It recommends the first accepted rank; it never
+falls back to the closest rejected image.
+
+For example, raw retrieval can return gray wolf at `0.93` before red fox at
+`0.90`. Guarded recommendation records the wolf as `SUBJECT_MISMATCH` and selects
+the fox. If only wolf and dog are available, the response is
+`NO_CONFIDENT_MATCH`, with a readable reason for every rejected candidate. The
+aliases `red fox`, `red_fox`, and `Vulpes vulpes` normalize to the same centralized
+subject concept.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 

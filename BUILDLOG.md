@@ -283,3 +283,54 @@ This log records how AI assistance was used, which design choices were made, and
 
 - The mismatch guard, final recommendations/refusal, review workflow, evaluation,
   frontend, and Phase 8+ work remain unimplemented.
+
+## 2026-08-24 — Phase 8 deterministic guarded recommendations
+
+### Decisions
+
+- Keep `GET /posts/{post_id}/image-candidates` unchanged as raw semantic retrieval;
+  add `POST /posts/{post_id}/recommendations` as a separate guarded operation.
+- Implement a pure `MismatchGuard` with stable codes and strict order: invalid
+  metadata, low confidence/flag, subject mismatch, category mismatch, required tag,
+  low similarity, then accepted.
+- Normalize subject aliases centrally. `red fox`, `red_fox`, and `Vulpes vulpes`
+  resolve to `red_fox`; broad category equality cannot override subject conflict.
+- Centralize provisional `0.70` similarity and vision-confidence thresholds under
+  config version `phase8-v1`; defer threshold tuning and metrics to Phase 9.
+- Add the smallest explicit post concept field, `required_tags`, without automatic
+  extraction. Match normalized required values against candidate vision tags.
+- Persist a run and every candidate decision/signal. Do not add review fields,
+  invoke providers, create synthetic AI logs, rerank, or fall back to rejected rows.
+
+### Verification performed
+
+- Deterministic local suite: `77 passed, 4 skipped` (the skipped cases require
+  explicitly enabled PostgreSQL).
+- PostgreSQL-enabled host suite with the worker paused to isolate its queue fixture:
+  `81 passed in 4.35s`, including persisted Phase 8 decisions through real pgvector.
+- Final Python 3.12 container suite: `77 passed, 4 skipped in 8.03s`.
+- Live dev database upgraded from `0006` to `0007`; `alembic current` reported
+  `0007 (head)` and `alembic check` reported no new upgrade operations.
+- A verified-new disposable PostgreSQL database completed clean install to head,
+  downgrade `0007 -> 0006`, re-upgrade, and drift check, then was removed and its
+  absence verified. The live dev database was never downgraded.
+- The pure direct demo returned wolf `0.93 -> SUBJECT_MISMATCH`, fox
+  `0.90 -> ACCEPTED` at rank 2, and a wolf/dog-only `NO_CONFIDENT_MATCH`.
+- Rebuilt Compose API and database were healthy; the worker was restored and
+  running. Compilation and `git diff --check` succeeded.
+
+### Problems encountered
+
+- The first test command looked for `.venv` under `backend`; the repository virtual
+  environment is one level above. The corrected interpreter ran successfully.
+- An early no-provider-log assertion counted the pre-existing vision/embedding logs,
+  and a fixture reused byte-identical fox pixels. The tests now compare call-log
+  count before/after recommendation and use a distinct image fixture.
+- A live fixed-ID SQL probe was rejected because it was not sufficiently isolated
+  from shared dev data. It was not retried; the direct evidence instead uses the
+  reproducible in-memory demo plus SQLite API and PostgreSQL persistence tests.
+
+### Still not done
+
+- Evaluation metrics/threshold tuning, human review, frontend, and Phase 9+ remain
+  intentionally unimplemented.

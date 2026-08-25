@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String, Text, Uuid, func
+from sqlalchemy import DateTime, JSON, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -15,6 +15,7 @@ class Post(Base):
     body: Mapped[str] = mapped_column(Text)
     expected_subject: Mapped[str | None] = mapped_column(String(100), nullable=True)
     expected_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    required_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -22,5 +23,8 @@ class Post(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     embeddings: Mapped[list["PostEmbedding"]] = relationship(  # noqa: F821
+        back_populates="post", cascade="all, delete-orphan"
+    )
+    recommendation_runs: Mapped[list["RecommendationRun"]] = relationship(  # noqa: F821
         back_populates="post", cascade="all, delete-orphan"
     )

@@ -90,7 +90,7 @@ PostgreSQL with pgvector stores both vector types. Retrieval ranks candidate ima
 
 Retrieval produces candidates, not decisions. Every candidate passes through the guard.
 
-Phase 7 implements only the first sentence: `ImageRetrievalService` retrieves the
+Phase 7 implements retrieval: `ImageRetrievalService` retrieves the
 configured post embedding and asks PostgreSQL for compatible image embeddings
 ordered by pgvector cosine distance (`<=>`) ascending, then image UUID ascending.
 The API converts distance to similarity with `1 - distance`; higher is always
@@ -103,6 +103,9 @@ a visible conflict instead of an empty, misleading result. Missing metadata is
 excluded by the join, and schema-invalid metadata is excluded by service-level
 validation. Flagged low-confidence metadata remains visible and explicitly
 flagged. None of these candidates is accepted or rejected during retrieval.
+Phase 8 leaves that raw endpoint unchanged and lets `RecommendationService` read
+the ranked rows (including invalid metadata), invoke `MismatchGuard`, persist every
+decision, and select only the first accepted semantic rank.
 
 ## Mismatch guard
 
@@ -121,11 +124,20 @@ If every candidate is rejected, the matching result is `NO_CONFIDENT_MATCH` and 
 
 **A high semantic similarity score must never override a hard subject mismatch.** The guard does not call Gemini and must be fully deterministic under a fixed configuration.
 
-All thresholds will eventually live in one versioned location:
+The provisional thresholds live in one versioned location:
 
 `backend/app/core/matching_config.py`
 
-That Python file is intentionally not created during Phase 1. Threshold values will be tuned using labeled evaluation data rather than scattered or guessed during implementation.
+`phase8-v1` uses minimum similarity `0.70` and minimum vision confidence `0.70`.
+They are implementation defaults, not optimized values; Phase 9 evaluation will
+tune them. Subject aliases are centralized in `subject_taxonomy.py`, including
+`red fox`, `red_fox`, and `Vulpes vulpes` -> `red_fox`.
+
+Each request creates a `recommendation_runs` row with config and embedding identity
+and one `recommendations` row per candidate. Candidate rows retain rank, similarity,
+confidence, metadata flags, expected/candidate taxonomy inputs, required/candidate
+tags, decision/reason code, and explanation. No review fields or AI-call logs are
+created by this deterministic flow.
 
 ## Durable job design
 

@@ -23,6 +23,7 @@ class RankedImageRecord:
     objects: list[str]
     vision_confidence: float
     is_low_confidence: bool
+    metadata_status: str
 
 
 class ImageRetrievalRepository:
@@ -187,4 +188,5 @@ class ImageRetrievalRepository:
             objects=metadata.objects,
             vision_confidence=metadata.confidence,
             is_low_confidence=metadata.is_low_confidence,
+            metadata_status=metadata.metadata_status,
         )

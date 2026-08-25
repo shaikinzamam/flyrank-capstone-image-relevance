@@ -57,6 +57,18 @@ class ImageRetrievalService:
         self._dimensions = dimensions
 
     def retrieve(self, post_id: UUID, *, top_k: int) -> ImageRetrievalResult:
+        records = self.rank_records(post_id, top_k=top_k)
+        candidates = self._valid_candidates(records)
+        return ImageRetrievalResult(
+            post_id=post_id,
+            embedding_model=self._model,
+            embedding_version=self._version,
+            dimensions=self._dimensions,
+            candidates=candidates,
+        )
+
+    def rank_records(self, post_id: UUID, *, top_k: int) -> list[RankedImageRecord]:
+        """Return raw ranked rows for deterministic guards without provider calls."""
         if self._posts.get(post_id) is None:
             raise PostNotFoundError("Post not found")
         if self._dimensions != EMBEDDING_DIMENSIONS:
@@ -88,21 +100,21 @@ class ImageRetrievalService:
             raise IncompatibleEmbeddingError(
                 "No image embeddings are compatible with the post embedding"
             )
-        records = self._retrieval.rank_images(
+        return self._retrieval.rank_images(
             post_embedding.vector,
             model=self._model,
             version=self._version,
             dimensions=self._dimensions,
             top_k=top_k,
         )
-        candidates = self._valid_candidates(records)
-        return ImageRetrievalResult(
-            post_id=post_id,
-            embedding_model=self._model,
-            embedding_version=self._version,
-            dimensions=self._dimensions,
-            candidates=candidates,
-        )
+
+    @property
+    def embedding_model(self) -> str:
+        return self._model
+
+    @property
+    def embedding_version(self) -> str:
+        return self._version
 
     @staticmethod
     def _valid_candidates(

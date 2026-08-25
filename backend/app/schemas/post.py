@@ -2,13 +2,16 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 RequiredText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OptionalSubject = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)
 ]
 OptionalCategory = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
+]
+RequiredTag = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)
 ]
 
@@ -20,6 +23,7 @@ class CreatePostRequest(BaseModel):
     body: RequiredText
     expected_subject: OptionalSubject | None = None
     expected_category: OptionalCategory | None = None
+    required_tags: list[RequiredTag] = Field(default_factory=list, max_length=20)
 
 
 class PostResponse(CreatePostRequest):

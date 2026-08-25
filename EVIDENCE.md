@@ -23,6 +23,22 @@ These checks establish infrastructure only and do not complete the feature-level
 - Docker reported both `db` and `api` healthy. Live upload, list, detail, duplicate, row, and file checks succeeded.
 - `pytest` under containerized Python 3.12.14: `14 passed in 0.49s` on the final rebuild.
 
+## Phase 8 guarded-recommendation verification
+
+- Local deterministic suite: `77 passed, 4 PostgreSQL-only tests skipped`.
+- PostgreSQL-enabled suite: `81 passed`, including the persisted fox-over-wolf
+  recommendation test against real pgvector ranking.
+- Final Python 3.12 container suite: `77 passed, 4 PostgreSQL-only tests skipped
+  in 8.03s`.
+- Alembic `0007` adds required post tags, recommendation runs, candidate decisions,
+  constraints, indexes, and foreign keys. Live upgrade and `alembic check` passed.
+- A disposable PostgreSQL database passed clean upgrade, `0007 -> 0006` downgrade,
+  re-upgrade, and drift check; it was then removed and absence verified.
+- Direct deterministic output: gray wolf `0.93` was `SUBJECT_MISMATCH`, red fox
+  `0.90` was `ACCEPTED` at rank 2, and wolf/dog-only input returned
+  `NO_CONFIDENT_MATCH`.
+- Rebuilt Compose API/database were healthy and the worker was running.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
@@ -41,19 +57,26 @@ These checks establish infrastructure only and do not complete the feature-level
 - [x] **Phase 7 evidence — Ranked candidates:** The post candidate endpoint uses
   exact pgvector cosine distance, converts it to descending similarity, limits in
   SQL, and returns typed metadata snapshots with deterministic UUID tie handling.
-- [ ] **Pending — Guarded suggestions:** Posts return safety-checked image suggestions.
-- [ ] **Pending — Equivalent concepts:** Semantic matching demonstrates that `red fox` matches `Vulpes vulpes`.
+- [x] **Phase 8 evidence — Guarded suggestions:** `POST
+  /posts/{post_id}/recommendations` evaluates ranked candidates and persists a
+  versioned run plus every accepted/rejected decision.
+- [x] **Phase 8 evidence — Equivalent concepts:** Deterministic tests prove that
+  `red fox`, `red_fox`, and `Vulpes vulpes` normalize to the same concept.
 
 ## Safety layer
 
-- [ ] **Pending — Fox/wolf rejection:** The mismatch guard provably rejects a wolf recommendation for a fox article.
-- [ ] **Pending — Explanations:** Rejections contain human-readable explanations.
-- [ ] **Pending — Safe refusal:** When no candidate clears the guard, the system returns `No confident match` with reasons.
+- [x] **Phase 8 evidence — Fox/wolf rejection:** A forced `0.93` wolf at rank 1
+  is persisted as `SUBJECT_MISMATCH`; the `0.90` fox at rank 2 is recommended.
+- [x] **Phase 8 evidence — Explanations:** Every candidate decision contains a
+  stable reason code and a human-readable explanation.
+- [x] **Phase 8 evidence — Safe refusal:** Wolf/dog-only candidates return and
+  persist `NO_CONFIDENT_MATCH`; no closest-candidate fallback exists.
 
 ## Backend
 
 - [ ] **Partial — Persistence:** Migrated models now exist for images, metadata,
-  posts, and embeddings. Suggestions and review records remain pending.
+  posts, embeddings, recommendation runs, and candidate decisions. Review records
+  remain pending.
 - [ ] **Pending — API validation:** Endpoint input is validated and bad requests produce clean 4xx responses.
 - [ ] **Pending — Review workflow:** A user can inspect why a suggestion was made and approve or reject it.
 - [ ] **Pending — Authorization:** Minimum real authentication and authorization protect non-public endpoints.
@@ -65,8 +88,12 @@ These checks establish infrastructure only and do not complete the feature-level
 ## Quality and documentation
 
 - [x] **Phase 4 evidence — Schema tests:** The deterministic suite covers valid metadata, malformed output, required fields, confidence bounds, blank/empty tags, collection normalization, taxonomy rejection, low-confidence flags, persistence, state transitions, provider timeout/failure, missing images, idempotent reuse, and explicit replacement.
-- [ ] **Pending — Mismatch tests:** Automated tests cover the forced fox-versus-wolf rejection.
-- [ ] **Pending — Matching tests:** Automated tests cover matching accuracy and equivalent concepts.
+- [x] **Phase 8 evidence — Mismatch tests:** Automated tests cover forced
+  fox-versus-wolf rejection, decision order, low confidence/similarity, category,
+  required tags, invalid metadata, explanations, refusal, persistence, and no
+  provider/log calls.
+- [ ] **Partial — Matching tests:** Automated tests cover deterministic guard
+  behavior and equivalent concepts; labeled matching accuracy remains Phase 9.
 - [x] **Phase 5 evidence — Resilience tests:** Tests cover provider failure, successful retry, permanent failure, exhaustion, active-lease exclusion, expired-lease recovery, idempotent job requests, budget denial, inaccessible storage, and real PostgreSQL concurrent claiming.
 - [x] **Phase 6 evidence — Embedding tests:** Deterministic tests cover semantic
   text, image/post persistence, reuse and regeneration, compatible version changes,
@@ -85,7 +112,9 @@ These checks establish infrastructure only and do not complete the feature-level
 
 - [ ] **Pending — Probe 1:** Batch processing gives every corpus image schema-valid metadata and flags at least one low-confidence result.
 - [ ] **Pending — Probe 2:** A red-fox article ranks a fox first and ranks wolf and dog clearly lower.
-- [ ] **Pending — Probe 3:** A forced wolf candidate is rejected with a subject/category mismatch explanation.
-- [ ] **Pending — Probe 4:** A post without a suitable image returns `No confident match` and reasons.
+- [x] **Phase 8 evidence — Probe 3:** A forced higher-ranked wolf is rejected with
+  `SUBJECT_MISMATCH` and an expected-red-fox/detected-gray-wolf explanation.
+- [x] **Phase 8 evidence — Probe 4:** A post with only wolf and dog returns
+  `NO_CONFIDENT_MATCH` and per-candidate reasons.
 - [ ] **Pending — Probe 5:** The evaluation command reports top-1 precision matching the README.
 - [ ] **Pending — Probe 6:** Every vision and embedding call has a corresponding cost-log entry.

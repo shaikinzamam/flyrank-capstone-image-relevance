@@ -8,6 +8,12 @@ from app.models.processing_job import (
     ProcessingJobItem,
 )
 from app.models.post import Post
+from app.models.recommendation import (
+    GuardDecision,
+    Recommendation,
+    RecommendationRun,
+    RecommendationRunStatus,
+)
 
 __all__ = [
     "AiCallLog",
@@ -22,4 +28,8 @@ __all__ = [
     "ProcessingStatus",
     "Post",
     "PostEmbedding",
+    "GuardDecision",
+    "Recommendation",
+    "RecommendationRun",
+    "RecommendationRunStatus",
 ]
