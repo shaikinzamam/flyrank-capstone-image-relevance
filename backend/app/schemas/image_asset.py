@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.image_metadata import ImageMetadataResponse
+
 ProcessingStatusValue = Literal[
     "uploaded",
     "queued",
@@ -25,3 +27,20 @@ class ImageAssetResponse(BaseModel):
     processing_status: ProcessingStatusValue
     created_at: datetime
     updated_at: datetime
+
+
+class ImageEmbeddingSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    embedding_model: str
+    embedding_version: str
+    dimensions: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ImageDetailResponse(BaseModel):
+    asset: ImageAssetResponse
+    metadata: ImageMetadataResponse | None
+    embeddings: list[ImageEmbeddingSummary]

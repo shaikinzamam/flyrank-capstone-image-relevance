@@ -445,3 +445,47 @@ This log records how AI assistance was used, which design choices were made, and
 
 - Frontend, authentication, workspace isolation, notifications, roles, approval
   chains, and collaboration remain intentionally out of scope.
+
+## 2026-08-25 — Phase 11 Next.js product interface
+
+### Decisions
+
+- Build an App Router frontend with strict TypeScript, Tailwind CSS, Motion,
+  native hooks, and a centralized typed fetch client; add no state framework.
+- Use restrained CSS perspective/rotation/translation and Motion springs. Disable
+  pointer tilt for touch/reduced-motion users; keep Three.js/WebGL excluded.
+- Add only browser integration reads to FastAPI: validated image bytes, composed
+  image/embedding details, recommendation IDs, and configured local CORS.
+- Keep semantic candidates visually separate from guarded results. Never show a
+  rejected candidate as usable or expose approval when prohibited.
+- Add a non-root standalone Next.js production service to Docker Compose.
+
+### Verification performed
+
+- Frontend dependencies: 472 packages audited, zero vulnerabilities.
+- Vitest: 10 focused UI/component tests passed.
+- Strict TypeScript and ESLint passed; the production build emitted all routes.
+- Backend local regression: `96 passed, 5 skipped`; fully enabled PostgreSQL:
+  `101 passed`.
+- Rebuilt Python 3.12 API container: `96 passed, 5 skipped in 15.25s`.
+- Live four-service route probes and validated image-content/CORS checks passed.
+  Responsive screenshots covered 375/768/1024/1440 widths.
+
+### Problems encountered
+
+- Windows npm shims broke on the workspace `&`; scripts now invoke pinned Node
+  entrypoints directly while preserving normal `npm run` commands.
+- Vitest initially retained DOM between tests; explicit cleanup fixed isolation.
+- Next's lint rule misclassified awaited loader callbacks as synchronous effect
+  updates; narrow documented suppressions cover only those async loaders.
+- `next/font` could not download Google fonts during the restricted build; a
+  system-font stack removed that network dependency.
+- Docker Desktop was stopped and was restarted for container verification.
+- Resumed Docker had subsecond host/container clock skew; the PostgreSQL claim
+  fixture now uses an explicit already-available timestamp without changing worker
+  logic. Mobile screenshots also exposed and fixed 3D horizontal overflow.
+
+### Still not done
+
+- Phase 12 final polish/deployment, authentication, workspace isolation,
+  notifications, roles, and collaboration remain out of scope.

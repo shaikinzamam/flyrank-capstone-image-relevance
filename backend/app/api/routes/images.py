@@ -1,10 +1,15 @@
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 
 from app.api.dependencies import Embeddings, ImageAnalysis, ImageAssetsService, ProcessingJobs
 from app.schemas.embedding import EmbeddingResponse
-from app.schemas.image_asset import ImageAssetResponse
+from app.schemas.image_asset import (
+    ImageAssetResponse,
+    ImageDetailResponse,
+    ImageEmbeddingSummary,
+)
 from app.schemas.image_metadata import AnalyzeImageResponse, ImageMetadataResponse
 from app.schemas.processing_job import (
     CreateProcessingJobRequest,
@@ -28,6 +33,7 @@ from app.services.image_storage import (
     ImageTooLargeError,
     InvalidImageError,
     UnsupportedImageTypeError,
+    InvalidStoredImageError,
 )
 from app.services.processing_jobs import (
     IdempotencyConflictError,
@@ -153,6 +159,46 @@ def get_image(image_id: UUID, service: ImageAssetsService) -> ImageAssetResponse
             detail=str(exc),
         ) from exc
     return ImageAssetResponse.model_validate(asset)
+
+
+@router.get("/{image_id}/details", response_model=ImageDetailResponse)
+def get_image_details(
+    image_id: UUID, service: ImageAssetsService
+) -> ImageDetailResponse:
+    try:
+        asset = service.get(image_id)
+    except ImageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return ImageDetailResponse(
+        asset=ImageAssetResponse.model_validate(asset),
+        metadata=(
+            ImageMetadataResponse.model_validate(asset.metadata_record)
+            if asset.metadata_record is not None
+            else None
+        ),
+        embeddings=[
+            ImageEmbeddingSummary.model_validate(embedding)
+            for embedding in asset.embeddings
+        ],
+    )
+
+
+@router.get("/{image_id}/content", response_class=FileResponse)
+def get_image_content(image_id: UUID, service: ImageAssetsService) -> FileResponse:
+    try:
+        asset, path = service.get_content_path(image_id)
+    except ImageNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InvalidStoredImageError as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type=asset.mime_type,
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post(

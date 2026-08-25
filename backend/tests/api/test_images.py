@@ -181,6 +181,68 @@ def test_get_image_by_id(image_api: ImageApiContext) -> None:
     assert response.json() == created
 
 
+def test_image_content_is_safely_served_with_stored_mime(
+    image_api: ImageApiContext,
+) -> None:
+    content = image_bytes("PNG")
+    created = upload(
+        image_api,
+        filename="served.png",
+        content=content,
+        mime_type="image/png",
+    ).json()
+
+    response = image_api.client.get(f"/images/{created['id']}/content")
+
+    assert response.status_code == 200
+    assert response.content == content
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "private" in response.headers["cache-control"]
+
+
+def test_image_details_compose_metadata_and_embedding_state(
+    image_api: ImageApiContext,
+) -> None:
+    created = upload(
+        image_api,
+        filename="details.png",
+        content=image_bytes("PNG"),
+        mime_type="image/png",
+    ).json()
+    pending = image_api.client.get(f"/images/{created['id']}/details")
+    analyzed = image_api.client.post(f"/images/{created['id']}/analyze")
+    embedded = image_api.client.post(f"/images/{created['id']}/embedding")
+    details = image_api.client.get(f"/images/{created['id']}/details")
+
+    assert pending.status_code == 200
+    assert pending.json()["metadata"] is None
+    assert pending.json()["embeddings"] == []
+    assert analyzed.status_code == embedded.status_code == 200
+    assert details.status_code == 200
+    assert details.json()["asset"]["id"] == created["id"]
+    assert details.json()["metadata"]["subject_code"] == "red_fox"
+    assert details.json()["embeddings"][0]["dimensions"] == 384
+
+
+def test_tampered_stored_image_content_returns_410(
+    image_api: ImageApiContext,
+) -> None:
+    created = upload(
+        image_api,
+        filename="tampered.png",
+        content=image_bytes("PNG"),
+        mime_type="image/png",
+    ).json()
+    path = image_api.storage.root / created["storage_key"]
+    path.write_bytes(b"tampered")
+
+    response = image_api.client.get(f"/images/{created['id']}/content")
+
+    assert response.status_code == 410
+    assert "integrity" in response.json()["detail"]
+
+
 def test_missing_image_returns_404(image_api: ImageApiContext) -> None:
     response = image_api.client.get(f"/images/{uuid4()}")
 

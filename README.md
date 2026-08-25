@@ -6,9 +6,9 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 10 human review**. The guarded
-recommendation pipeline now has a reproducible ten-example baseline, persisted
-reports, a CLI, and append-only human review endpoints. Frontend work has not started.
+The project is currently at **Phase 11 frontend**. A responsive Next.js interface
+now visualizes the image library, guided matching, immutable guard evidence,
+human review history, and bounded evaluation metrics.
 
 ## Problem
 
@@ -41,7 +41,7 @@ See [docs/design.md](docs/design.md) and [docs/architecture.md](docs/architectur
 - PostgreSQL-backed durable worker
 - pytest
 - Docker Compose
-- Later presentation layer: Next.js, TypeScript, Tailwind CSS, Framer Motion, and CSS 3D transforms
+- Next.js App Router, TypeScript, Tailwind CSS, Motion, and CSS 3D transforms
 
 Three.js and React Three Fiber are intentionally excluded.
 
@@ -57,6 +57,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 8 deterministic mismatch guard, persistence, and refusal: implemented
 - Phase 9 labeled deterministic evaluation and measured metrics: implemented
 - Phase 10 recommendation inspection and guarded human review: implemented
+- Phase 11 responsive Next.js product interface: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -74,11 +75,11 @@ Three.js and React Three Fiber are intentionally excluded.
 - Mismatch guard and final recommendations: implemented
 - Corpus collection: not started
 - Evaluation execution: implemented with a versioned deterministic baseline
-- Frontend: postponed until backend acceptance probes pass
+- Frontend landing, images, matching, review, and evaluation routes: implemented
 
-## Planned setup
+## Setup
 
-The current walking skeleton can be started from the repository root with:
+The complete local stack can be started from the repository root with:
 
 ```powershell
 docker compose up --build -d
@@ -93,6 +94,27 @@ docker compose exec -T api pytest
 ```
 
 Expected probe responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding remains future work.
+
+Open `http://localhost:3000` for the frontend. Browser API calls use
+`NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000`); allowed browser
+origins are controlled by backend `CORS_ALLOWED_ORIGINS`.
+
+For standalone frontend development:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm.cmd install
+npm.cmd run dev
+```
+
+Production UI values come from backend responses. Image previews use
+`GET /images/{image_id}/content`, which validates controlled path, MIME, hash,
+size, and decoded content without exposing host filesystem paths.
+
+Visual depth uses restrained CSS perspective, rotation, and translation animated
+with Motion springs. This is smaller and easier to make accessible than WebGL;
+Three.js and React Three Fiber remain excluded.
 
 Register an image with multipart form data and inspect registered assets with:
 

@@ -36,7 +36,27 @@ This project is **not** a general-purpose image search engine and does not attem
 
 It will not initially include Redis, Celery, multiple vision models, distributed object storage, complex role-based access control, OAuth, invitations, email verification, password reset, or unrelated account features.
 
-The premium Next.js frontend is presentation polish and not part of the backend correctness core. It is postponed until the backend acceptance probes pass. Three.js and React Three Fiber are out of scope.
+The premium Next.js frontend visualizes the completed backend but is not part of
+the backend correctness core. It uses TypeScript, Tailwind, Motion springs, and
+CSS 3D transforms. Three.js and React Three Fiber remain out of scope.
+
+## Frontend experience
+
+The App Router exposes landing, image library/detail, article matching,
+recommendation review, and evaluation pages. A central typed API layer owns
+network requests and human-readable error mapping. Production components never
+embed fake metadata, decisions, review state, or metrics.
+
+Article matching creates the post, generates its embedding, retrieves raw ranked
+candidates, and applies the guard sequentially. Raw rank is explicitly labeled
+as not safety-filtered, every persisted guard reason is shown, and refusal has a
+dedicated state rather than promoting a rejected candidate. Review pages keep
+immutable evidence visually separate from human decisions.
+
+Image bytes are served only after the backend resolves the opaque key beneath its
+controlled root and rechecks size, hash, MIME, and decoded format. CSS perspective
+provides sufficient depth with a smaller bundle and simpler reduced-motion and
+accessibility behavior than a 3D engine.
 
 ## Core pipeline
 

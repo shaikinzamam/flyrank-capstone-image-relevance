@@ -1,3 +1,4 @@
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -88,3 +89,12 @@ class ImageAssetService:
         if asset is None:
             raise ImageNotFoundError("Image asset not found")
         return asset
+
+    def get_content_path(self, image_id: UUID) -> tuple[ImageAsset, Path]:
+        asset = self.get(image_id)
+        path = self._storage.get_validated_path(
+            asset.storage_key,
+            expected_mime_type=asset.mime_type,
+            expected_sha256=asset.sha256,
+        )
+        return asset, path

@@ -138,6 +138,7 @@ class RecommendationService:
     @staticmethod
     def _response(item: Recommendation) -> CandidateDecisionResponse:
         return CandidateDecisionResponse(
+            recommendation_id=item.id,
             image_id=item.image_id,
             rank=item.rank,
             similarity_score=item.similarity_score,

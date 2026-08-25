@@ -46,6 +46,9 @@ def test_wolf_rank_one_is_rejected_and_fox_rank_two_is_recommended_and_persisted
     assert body["recommendation"]["reason_code"] == "ACCEPTED"
     assert body["rejected_candidates"] == [
         {
+            "recommendation_id": body["rejected_candidates"][0][
+                "recommendation_id"
+            ],
             "image_id": wolf["id"],
             "rank": 1,
             "similarity_score": body["rejected_candidates"][0]["similarity_score"],

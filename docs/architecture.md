@@ -3,7 +3,9 @@
 ## Component view
 
 ```text
-                     Next.js (later)
+                    Next.js frontend
+              App Router | typed API client
+             Tailwind | Motion | CSS 3D
                             |
                             v
                        FastAPI API
@@ -34,6 +36,16 @@
 ```
 
 The mismatch guard is a deterministic service inside the application layer. It is not implemented by Gemini and cannot be bypassed by a high vector-similarity score.
+
+The Phase 11 frontend is a presentation client, not a decision layer. It
+separates raw candidates from guarded outcomes, reads evaluation/review values
+from FastAPI, and hides approval when review is prohibited. Browser integration
+adds only configured CORS, validated image content, composed image read details,
+and recommendation IDs for navigation.
+
+CSS perspective and transforms provide restrained card depth; Motion springs
+handle pointer tilt and state transitions with reduced-motion fallbacks. No WebGL,
+Three.js, React Three Fiber, or frontend state framework is used.
 
 ## Layer responsibilities
 
@@ -186,4 +198,7 @@ no accepted candidates
 
 ## Deployment boundary
 
-Docker Compose starts PostgreSQL, the FastAPI process, and a separate image-processing worker. The deterministic Compose default uses the fake vision provider; Gemini remains an explicit environment configuration. The frontend will be added only after the backend probes pass. Redis, Celery, Three.js, and React Three Fiber are not planned.
+Docker Compose starts PostgreSQL, FastAPI, the image-processing worker, and the
+standalone Next.js production server. The deterministic Compose default uses the
+fake vision provider; Gemini remains explicit configuration. Redis, Celery,
+Three.js, and React Three Fiber are not planned.

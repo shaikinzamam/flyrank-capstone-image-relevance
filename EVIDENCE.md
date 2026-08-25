@@ -79,6 +79,27 @@ These checks establish infrastructure only and do not complete the feature-level
 - Evaluation regression output remained top-1 precision `1.0000` with zero unsafe
   acceptances. Rebuilt API/PostgreSQL were healthy and the worker was restored.
 
+## Phase 11 Next.js frontend verification
+
+- Pinned Next.js 16 App Router, React 19, TypeScript, Tailwind CSS 4, and Motion;
+  `npm install` audited 472 packages with zero vulnerabilities.
+- Ten focused UI checks cover landing content, typed image cards, rank order,
+  guard rejection, safe refusal, allowed/blocked review actions, API metrics,
+  human-readable errors, and reduced-motion tilt logic.
+- Strict TypeScript, ESLint, and the production build pass. Static and dynamic
+  page routes compile successfully without remote font downloads.
+- Added validated image content, composed detail reads, and explicit local CORS.
+  Backend local suite passed `96` tests; fully enabled PostgreSQL passed `101`.
+- Rebuilt Python 3.12 API image passed `96` tests with the five explicitly gated
+  PostgreSQL tests skipped; no Alembic drift was detected.
+- Live `/`, `/images`, `/match`, `/evaluation`, and dynamic review routes returned
+  `200`. Image detail/content returned metadata and validated PNG bytes with
+  `nosniff`; CORS returned only the configured origin.
+- Headless-browser responsive checks covered 375, 768, 1024, and 1440 pixel widths;
+  the mobile pass caught and fixed 3D-layer horizontal overflow.
+- Docker built the standalone Next.js image and reported database, API, and
+  frontend healthy; the worker is restored after database concurrency tests.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.

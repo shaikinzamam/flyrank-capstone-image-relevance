@@ -20,6 +20,10 @@ class Settings(BaseSettings):
         default="development",
         validation_alias="APP_ENV",
     )
+    cors_allowed_origins: str = Field(
+        default="http://localhost:3000",
+        validation_alias="CORS_ALLOWED_ORIGINS",
+    )
     database_url: str = Field(
         default="postgresql+psycopg://flyrank:flyrank@localhost:5432/flyrank",
         validation_alias="DATABASE_URL",

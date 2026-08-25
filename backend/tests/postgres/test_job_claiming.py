@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 from threading import Barrier, Lock, Thread
 from uuid import uuid4
 
@@ -40,7 +41,14 @@ def test_two_postgres_workers_cannot_claim_the_same_item() -> None:
         job = ProcessingJob(
             total_items=1,
             idempotency_key=f"postgres-claim-{unique}",
-            items=[ProcessingJobItem(image_id=asset.id, max_attempts=3)],
+            items=[
+                ProcessingJobItem(
+                    image_id=asset.id,
+                    max_attempts=3,
+                    # Avoid host/container subsecond clock skew in this fixture.
+                    available_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+                )
+            ],
         )
         session.add_all([asset, job])
         session.commit()

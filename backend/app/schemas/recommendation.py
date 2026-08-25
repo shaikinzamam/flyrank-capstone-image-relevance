@@ -10,6 +10,7 @@ from app.schemas.post import PostResponse
 
 
 class CandidateDecisionResponse(BaseModel):
+    recommendation_id: UUID
     image_id: UUID
     rank: Annotated[int, Field(ge=1)]
     similarity_score: Annotated[float, Field(ge=-1, le=1)]
