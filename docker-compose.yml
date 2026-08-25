@@ -42,6 +42,7 @@ services:
       EMBEDDING_VERSION: ${EMBEDDING_VERSION:-c9745ed1d9f207416be6d2e6f8de32d1f16199bf}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-384}
       EMBEDDING_NORMALIZE: ${EMBEDDING_NORMALIZE:-true}
+      EVALUATION_DATASET_PATH: /app/data/evaluation.jsonl
     depends_on:
       db:
         condition: service_healthy
@@ -60,6 +61,7 @@ services:
       - "8000:8000"
     volumes:
       - image_uploads:/app/uploads
+      - ./data:/app/data:ro
 
   worker:
     image: imagerelevanceauto-tagging-api

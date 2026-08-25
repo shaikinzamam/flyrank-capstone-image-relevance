@@ -172,7 +172,11 @@ OAuth, complex RBAC, invitations, email workflows, and general account-managemen
 
 ## Evaluation design
 
-The planned JSON Lines records in `data/evaluation.jsonl` describe article input, expected subject and category, acceptable images, unsafe images, expected no-match behavior, and human labeling notes.
+The versioned JSON Lines records in `data/evaluation.jsonl` describe article input,
+expected subject/category/tags, acceptable and unsafe images, explicit candidate
+metadata/vectors, expected guard decisions, expected no-match behavior, and human
+labeling notes. Parsing rejects duplicate example IDs, mixed versions, malformed
+references, overlapping labels, and missing per-candidate decisions.
 
 The set covers:
 
@@ -183,10 +187,28 @@ The set covers:
 - a generic dog hard negative
 - a post for which no suitable image exists
 - low-confidence metadata that must be rejected
+- low-similarity correct-subject metadata
+- required-tag failure
+- category mismatch
 
-The future runner will report total examples, correct and incorrect top-1 results, safe and unsafe guard decisions, no-match behavior, and the PDF-required top-1 precision. Model, dataset, taxonomy, guard configuration, and threshold versions will be recorded with each run.
+`EvaluationEngine` creates a separate in-memory database per example and exercises
+the actual post/image embedding services with deterministic vectors, retrieval,
+mismatch guard, and recommendation persistence. This cannot touch the development
+corpus. `EvaluationService` persists only the final report to `evaluation_runs`.
 
-The checked-in records are planned labels only. They have not been evaluated, and no performance number exists yet.
+Metric formulas:
+
+- top-1 precision = correct acceptable issued recommendations / all issued recommendations
+- safe acceptance precision = accepted candidates labeled acceptable / all accepted candidates
+- unsafe rejection recall = unsafe candidates rejected / all labeled unsafe candidates
+- incorrect refusal = expected recommendation with `NO_CONFIDENT_MATCH`
+- correct no-match = expected `NO_CONFIDENT_MATCH` with no selected image
+
+The project-local materials do not contain the PDF's mathematical formula, so the
+standard precision interpretation above is documented explicitly. Refusals are
+reported separately and are not folded into precision. Baseline `evaluation-v1`
+under unchanged `phase8-v1` produced `3/3` correct issued recommendations,
+`7/7` correct refusals, zero unsafe acceptances, and top-1 precision `1.0000`.
 
 ## Main risks
 

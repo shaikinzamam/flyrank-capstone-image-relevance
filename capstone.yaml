@@ -1,8 +1,8 @@
 name: flyrank-capstone-image-relevance
 title: Image Relevance & Auto-Tagging
 subtitle: AI Image Understanding & Content Matching Engine
-phase: walking_skeleton
-implementation_status: phase_2_complete
+phase: labeled_evaluation
+implementation_status: phase_9_complete
 
 # `run` and `test` were verified in Phase 2. Seeding remains planned and must
 # not be treated as executable until the corpus workflow exists.
@@ -29,9 +29,9 @@ evaluator_endpoints:
     path: /jobs/{job_id}
     status: planned
   post_recommendations:
-    method: GET
-    path: /posts/{post_id}/image-recommendations
-    status: planned
+    method: POST
+    path: /posts/{post_id}/recommendations
+    status: available
   recommendation_detail:
     method: GET
     path: /recommendations/{recommendation_id}
@@ -47,11 +47,11 @@ evaluator_endpoints:
   run_evaluation:
     method: POST
     path: /evaluation/run
-    status: planned
+    status: available
   latest_evaluation:
     method: GET
     path: /evaluation/latest
-    status: planned
+    status: available
   ai_usage:
     method: GET
     path: /metrics/ai-usage

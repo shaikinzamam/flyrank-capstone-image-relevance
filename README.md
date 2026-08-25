@@ -6,10 +6,10 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 8 guarded recommendations**. PostgreSQL/pgvector
-still returns raw semantic candidates, while a separate deterministic guard now
-accepts the highest-ranked safe candidate or explicitly returns
-`NO_CONFIDENT_MATCH`. Human review and evaluation have not started.
+The project is currently at **Phase 9 labeled evaluation**. The guarded
+recommendation pipeline now has a reproducible ten-example baseline, persisted
+reports, a CLI, and inspection endpoints. Human review and frontend work have not
+started.
 
 ## Problem
 
@@ -56,6 +56,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 6 embedding generation and pgvector persistence: implemented
 - Phase 7 exact semantic retrieval and candidate ranking: implemented
 - Phase 8 deterministic mismatch guard, persistence, and refusal: implemented
+- Phase 9 labeled deterministic evaluation and measured metrics: implemented
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -72,7 +73,7 @@ Three.js and React Three Fiber are intentionally excluded.
 - Semantic candidate ranking: implemented
 - Mismatch guard and final recommendations: implemented
 - Corpus collection: not started
-- Evaluation execution: not started
+- Evaluation execution: implemented with a versioned deterministic baseline
 - Frontend: postponed until backend acceptance probes pass
 
 ## Planned setup
@@ -91,7 +92,7 @@ Invoke-RestMethod http://localhost:8000/ready
 docker compose exec -T api pytest
 ```
 
-Expected probe responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding and evaluation commands remain TODO because those features are outside the current ingestion phase.
+Expected probe responses are `{"status":"ok"}` and `{"status":"ready","database":"reachable"}`. Corpus seeding remains future work.
 
 Register an image with multipart form data and inspect registered assets with:
 
@@ -192,9 +193,43 @@ Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded 
 
 ## Evaluation
 
-A small labeled evaluation set will measure top-1 precision and guard behavior, including equivalent terms, unsafe sibling subjects, low-confidence metadata, and no-match cases. The initial planned records are in [data/evaluation.jsonl](data/evaluation.jsonl).
+A versioned labeled set in [data/evaluation.jsonl](data/evaluation.jsonl) covers
+direct fox/wolf matches, `Vulpes vulpes`, fox-versus-wolf and dog hard negatives,
+no suitable image, low confidence, low similarity, required tags, and category
+mismatch. Run the official deterministic baseline from `backend`:
 
-**No evaluation has been run and no precision score is claimed yet.** The README will contain the measured result only after the evaluation runner exists and has been executed.
+```powershell
+..\.venv\Scripts\python.exe -m scripts.evaluate
+```
+
+The command persists an `EvaluationRun` and writes generated machine-readable
+output to the ignored `backend/artifacts/evaluation/latest.json`. Equivalent API
+operations are `POST /evaluation/run`, `GET /evaluation/latest`, and
+`GET /evaluation/{run_id}`. Evaluation fixtures run in isolated in-memory databases;
+only the final structured report enters the normal application database.
+
+### Measured baseline
+
+- Dataset: `evaluation-v1` (10 explicitly labeled examples)
+- Evaluator: `phase9-v1`
+- Matching configuration: `phase8-v1` (`0.70` similarity, `0.70` confidence)
+- Eligible recommendation examples: 3
+- Correct top-1 recommendations: 3
+- Incorrect top-1 recommendations: 0
+- Correct `NO_CONFIDENT_MATCH` outcomes: 7
+- Incorrect refusals: 0
+- Unsafe acceptances: 0
+- **Top-1 precision: `1.0000`**
+
+Top-1 precision is `correct acceptable top-1 recommendations / all issued top-1
+recommendations`, or `3 / (3 + 0)`. Refusals are excluded from that denominator
+and reported separately, so precision is not being substituted with overall
+accuracy. The official PDF's mathematical definition was not available in the
+project materials; this standard interpretation is therefore explicit rather
+than implied.
+
+This perfect result describes a small deterministic acceptance dataset, not
+general-world model quality. Thresholds were not changed after seeing the result.
 
 ## Demo scenario
 
@@ -211,7 +246,8 @@ The demo will also show batch progress, structured metadata, explanations, a hum
 - This is not a general-purpose image search engine and will target approximately 50 images.
 - The initial taxonomy covers only a small, documented set of subjects.
 - Model confidence is an input signal, not calibrated truth.
-- Thresholds must be tuned against labeled data before they can be considered reliable.
+- The baseline thresholds have not been tuned and ten deterministic fixtures are
+  too small to establish general-world performance.
 - Local filesystem image storage is suitable for the capstone but not a distributed production deployment.
 - Authentication and workspace isolation are not implemented yet; the image table is intentionally unscoped until that boundary is designed.
 - The Phase 4 taxonomy is intentionally limited to red fox, gray wolf, domestic dog, brown bear, and white-tailed deer; out-of-taxonomy classifications are rejected.

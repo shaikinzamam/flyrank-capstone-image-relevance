@@ -143,6 +143,22 @@ future phase:
 persisted recommendation -> inspect / approve / reject
 ```
 
+### Labeled evaluation
+
+```text
+evaluation.jsonl -> strict label validation
+  -> isolated post/image fixtures
+  -> actual embedding -> retrieval -> guard -> recommendation services
+  -> per-example evidence + metric calculation
+  -> one EvaluationRun report in the application database
+```
+
+The fixtures use deterministic 384-dimensional vectors and never load Gemini or
+sentence-transformers. Each example has its own in-memory database, so evaluation
+posts, images, embeddings, AI-call logs, and recommendations cannot pollute the
+development corpus. CLI and API runs persist only the versioned aggregate and
+per-example JSON report.
+
 Pgvector returns cosine distance through `<=>`; the repository orders it ascending
 and limits the query, while the service exposes `1 - distance` so larger response
 scores are always better. Only exact model/revision/dimension matches are compared.

@@ -334,3 +334,65 @@ This log records how AI assistance was used, which design choices were made, and
 
 - Evaluation metrics/threshold tuning, human review, frontend, and Phase 9+ remain
   intentionally unimplemented.
+
+## 2026-08-25 — Phase 9 labeled deterministic evaluation
+
+### Decisions
+
+- Replace placeholder labels with `evaluation-v1`: ten explicit cases covering
+  direct fox, scientific alias, direct wolf, forced wolf/dog hard negatives, no
+  suitable image, low confidence, low similarity, required tag, and category.
+- Run each example in a separate in-memory database through actual embedding,
+  retrieval, guard, and recommendation services. Persist only the report in the
+  normal database, preventing evaluation corpus pollution.
+- Define top-1 precision as correct acceptable issued recommendations divided by
+  all issued recommendations. Keep correct/incorrect refusals separate. The local
+  materials and public search did not expose the PDF's mathematical wording, so
+  the interpretation is explicit.
+- Add `EvaluationRun`, CLI output plus ignored JSON artifact, and minimal run/latest/
+  by-ID API endpoints. Store complete per-example evidence in `report_json`.
+- Preserve baseline `phase8-v1` thresholds (`0.70` similarity and confidence).
+  No alternative threshold was tested or adopted.
+
+### Baseline result
+
+- Dataset `evaluation-v1`: 10 examples, 3 eligible recommendation examples.
+- Correct/incorrect top-1: `3/0`; correct/incorrect refusals: `7/0`.
+- Correct unsafe-candidate rejections: `10`; unsafe acceptances: `0`.
+- Top-1 precision, safe acceptance precision, and unsafe rejection recall: `1.0000`.
+- No per-example failures occurred. This is a small deterministic acceptance set,
+  not evidence of general-world model performance.
+
+### Verification performed
+
+- Final local suite: `85 passed, 5 PostgreSQL-only tests skipped in 10.97s`.
+- PostgreSQL-enabled complete suite: `90 passed in 14.39s`; a final focused
+  PostgreSQL evaluation persistence rerun also passed.
+- Final Python 3.12 container suite: `85 passed, 5 PostgreSQL-only tests skipped
+  in 13.32s`.
+- CLI persisted a report and printed evaluator `phase9-v1`, dataset
+  `evaluation-v1`, matching config `phase8-v1`, and precision `1.0000`.
+- Live evaluation API run/latest/by-ID responses agreed and returned the five
+  required acceptance-probe records with complete candidate evidence.
+- Docker API/PostgreSQL were healthy, the worker was running, and live `/health`
+  plus database-backed `/ready` returned `ok`/`reachable`.
+- Live database upgraded only from `0007` to `0008`; drift check passed. A
+  disposable database passed clean upgrade, `0008 -> 0007` downgrade, re-upgrade,
+  and drift check before verified removal.
+
+### Problems encountered
+
+- The first migration command stalled because Docker Desktop was no longer running
+  after the overnight session boundary. It was interrupted without DDL output,
+  Docker was restarted, PostgreSQL became healthy, and live upgrade `0007 -> 0008`
+  plus drift check then succeeded.
+- The first container test used a host-relative test path and looked for `/data`
+  instead of the configured `/app/data` mount. Application CLI/API resolution was
+  already correct; tests now use `EVALUATION_DATASET_PATH`, and the rebuilt suite
+  passes. The cold rebuild also had to refill its dependency cache after the base
+  image digest changed.
+
+### Still not done
+
+- Human review workflow, frontend, broad licensed corpus evaluation, authentication,
+  and Phase 10+ remain intentionally unimplemented.

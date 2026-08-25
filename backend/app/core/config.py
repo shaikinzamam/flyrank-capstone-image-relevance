@@ -100,6 +100,10 @@ class Settings(BaseSettings):
     embedding_normalize: bool = Field(
         default=True, validation_alias="EMBEDDING_NORMALIZE"
     )
+    evaluation_dataset_path: Path = Field(
+        default=Path("../data/evaluation.jsonl"),
+        validation_alias="EVALUATION_DATASET_PATH",
+    )
 
     @field_validator(
         "vision_budget_usd",

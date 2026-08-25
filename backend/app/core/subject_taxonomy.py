@@ -8,6 +8,7 @@ SUBJECT_ALIASES: dict[str, str] = {
     "red fox": "red_fox",
     "vulpes vulpes": "red_fox",
     "gray wolf": "gray_wolf",
+    "wolf": "gray_wolf",
     "grey wolf": "gray_wolf",
     "canis lupus": "gray_wolf",
     "domestic dog": "domestic_dog",

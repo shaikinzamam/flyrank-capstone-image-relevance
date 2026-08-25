@@ -13,6 +13,7 @@ from app.repositories.embeddings import EmbeddingRepository
 from app.repositories.posts import PostRepository
 from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.repositories.recommendations import RecommendationRepository
+from app.repositories.evaluations import EvaluationRepository
 from app.providers.embedding import EmbeddingProvider, SentenceTransformerEmbeddingProvider
 from app.providers.vision import GeminiVisionProvider, VisionProvider
 from app.providers.fake import FakeVisionProvider
@@ -24,6 +25,7 @@ from app.services.embeddings import EmbeddingService
 from app.services.posts import PostService
 from app.services.image_retrieval import ImageRetrievalService
 from app.services.recommendations import RecommendationService
+from app.services.evaluation import EvaluationService
 from app.services.readiness import DatabaseReadinessService
 
 DatabaseSession = Annotated[Session, Depends(get_db_session)]
@@ -193,3 +195,13 @@ def get_recommendation_service(
 Recommendations = Annotated[
     RecommendationService, Depends(get_recommendation_service)
 ]
+
+
+def get_evaluation_service(session: DatabaseSession) -> EvaluationService:
+    settings = get_settings()
+    return EvaluationService(
+        EvaluationRepository(session), settings.evaluation_dataset_path
+    )
+
+
+Evaluations = Annotated[EvaluationService, Depends(get_evaluation_service)]

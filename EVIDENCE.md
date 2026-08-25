@@ -39,6 +39,27 @@ These checks establish infrastructure only and do not complete the feature-level
   `NO_CONFIDENT_MATCH`.
 - Rebuilt Compose API/database were healthy and the worker was running.
 
+## Phase 9 labeled-evaluation verification
+
+- Baseline command output: 10 examples; 3 eligible; 3 correct top-1; 0 incorrect
+  top-1; 7 correct refusals; 0 incorrect refusals; 0 unsafe acceptances; top-1
+  precision `1.0000`.
+- Per-example evidence records expected/actual results, selected fixture ID, guard
+  decisions, reason codes, similarities, thresholds, and correctness.
+- Acceptance evidence includes higher-ranked wolf `0.93 -> SUBJECT_MISMATCH`, fox
+  rank 2 `0.90 -> ACCEPTED`, `Vulpes vulpes -> red fox`, no-suitable-image refusal,
+  and low-confidence fox `0.54 -> LOW_CONFIDENCE`.
+- Generated JSON lives at ignored `backend/artifacts/evaluation/latest.json`; the
+  full report is also durably stored in `evaluation_runs`.
+- Automated results: local `85 passed, 5 skipped`; PostgreSQL-enabled `90 passed`;
+  the PostgreSQL test inspects all ten persisted per-example reports.
+- Final Python 3.12 container suite: `85 passed, 5 PostgreSQL-only tests skipped
+  in 13.32s`.
+- Alembic `0008` passed live upgrade and drift checks plus disposable clean upgrade,
+  downgrade to `0007`, re-upgrade, and verified cleanup.
+- Live `POST /evaluation/run`, `GET /evaluation/latest`, and by-ID retrieval agreed
+  on the same run and measured metrics.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
@@ -93,7 +114,8 @@ These checks establish infrastructure only and do not complete the feature-level
   required tags, invalid metadata, explanations, refusal, persistence, and no
   provider/log calls.
 - [ ] **Partial — Matching tests:** Automated tests cover deterministic guard
-  behavior and equivalent concepts; labeled matching accuracy remains Phase 9.
+  behavior and equivalent concepts; the Phase 9 labeled baseline now covers all
+  declared matching cases, while broader corpus accuracy remains future work.
 - [x] **Phase 5 evidence — Resilience tests:** Tests cover provider failure, successful retry, permanent failure, exhaustion, active-lease exclusion, expired-lease recovery, idempotent job requests, budget denial, inaccessible storage, and real PostgreSQL concurrent claiming.
 - [x] **Phase 6 evidence — Embedding tests:** Deterministic tests cover semantic
   text, image/post persistence, reuse and regeneration, compatible version changes,
@@ -103,8 +125,13 @@ These checks establish infrastructure only and do not complete the feature-level
   order, limits, missing state, compatibility, low-confidence visibility, metadata,
   corrupt-metadata exclusion, ties, and no false AI logs. A PostgreSQL integration
   test proves fox/wolf/dog ordering with known 384-dimensional vectors.
-- [ ] **Pending — Evaluation:** A labeled dataset reports a real top-1 precision value.
-- [ ] **Pending — README metric:** The measured evaluation value is recorded in `README.md` and matches evaluator output.
+- [x] **Phase 9 evidence — Evaluation:** `evaluation-v1` contains ten explicit,
+  human-readable label records. The actual application pipeline produced 3 correct
+  top-1 recommendations, 0 incorrect top-1 recommendations, 7 correct refusals,
+  0 incorrect refusals, 10 correct unsafe-candidate rejections, and 0 unsafe
+  acceptances under unchanged `phase8-v1`.
+- [x] **Phase 9 evidence — README metric:** CLI output and README both report
+  top-1 precision `1.0000`, defined as `3 / (3 + 0)` issued recommendations.
 - [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.
 - [ ] **Pending — Submission pack:** All required files are complete and the architecture diagram is current.
 
@@ -116,5 +143,6 @@ These checks establish infrastructure only and do not complete the feature-level
   `SUBJECT_MISMATCH` and an expected-red-fox/detected-gray-wolf explanation.
 - [x] **Phase 8 evidence — Probe 4:** A post with only wolf and dog returns
   `NO_CONFIDENT_MATCH` and per-candidate reasons.
-- [ ] **Pending — Probe 5:** The evaluation command reports top-1 precision matching the README.
+- [x] **Phase 9 evidence — Probe 5:** `python -m scripts.evaluate` reports dataset
+  `evaluation-v1`, 10 examples, and top-1 precision `1.0000`, matching README.
 - [ ] **Pending — Probe 6:** Every vision and embedding call has a corresponding cost-log entry.

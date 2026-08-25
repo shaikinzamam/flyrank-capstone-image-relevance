@@ -1,5 +1,6 @@
 from app.models.image_asset import ImageAsset, ProcessingStatus
 from app.models.embedding import ImageEmbedding, PostEmbedding
+from app.models.evaluation import EvaluationRun
 from app.models.image_metadata import AiCallLog, ImageMetadata, MetadataStatus
 from app.models.processing_job import (
     JobItemStatus,
@@ -20,6 +21,7 @@ __all__ = [
     "ImageAsset",
     "ImageEmbedding",
     "ImageMetadata",
+    "EvaluationRun",
     "MetadataStatus",
     "JobItemStatus",
     "JobStatus",
