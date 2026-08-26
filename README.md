@@ -2,32 +2,49 @@
 
 ## AI Image Understanding & Content Matching Engine
 
+An AI-powered system that understands image libraries, retrieves semantically relevant candidates, and deterministically rejects unsafe mismatches instead of always returning the closest result.
+
 ## Project
 
-This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
-
-The project is currently at **Phase 12.5 corrective hardening**; Phase 13 remains
-paused. The backend and responsive frontend now include persisted bearer-key
-authorization, workspace isolation, asynchronous vision/embedding jobs, a pinned
-50-image licensed corpus, and corrected official evaluation metrics.
+This FlyRank Backend AI Engineering capstone is submission-ready. It includes
+persisted bearer-key authorization, workspace isolation, asynchronous
+vision/embedding jobs, a pinned 50-image licensed corpus, deterministic safety
+decisions, human review, and measured evaluation evidence.
 
 ## Problem
 
-Semantic similarity alone is not a safe recommendation policy. A gray wolf can be semantically close to an article about red foxes while still being the wrong subject. The system therefore combines semantic retrieval with a deterministic mismatch guard that can refuse every candidate and return `No confident match`.
+Raw semantic search can place foxes and wolves close together because their
+descriptions and contexts are related. Semantic closeness does not prove subject
+identity. The mismatch guard independently checks the expected subject, detected
+subject/category, metadata confidence, required tags, and similarity threshold.
+The final behavior is therefore either a safe recommendation or
+`NO_CONFIDENT_MATCH` with readable rejection reasons.
 
 ## Core idea
 
 ```text
-Images -> validated vision metadata -> image embeddings --+
-                                                        +-> ranking -> mismatch guard -> recommendation or refusal
-Articles ---------------------------> post embeddings ---+
+Authenticated client
+  -> FastAPI
+  -> workspace-scoped services and repositories
+  -> PostgreSQL + pgvector
+
+Image processing: durable job -> vision provider -> schema validation
+  -> metadata -> image embedding -> per-call accounting
+Post processing: durable job -> post embedding -> per-call accounting
+Matching: post embedding -> pgvector retrieval -> deterministic mismatch guard
+  -> persisted recommendation or NO_CONFIDENT_MATCH -> human review
+Evaluation: versioned labels -> real application services -> persisted metrics
 ```
 
 The mismatch guard remains separate from the vision model. A high similarity score never overrides a hard subject mismatch.
 
 ## Architecture
 
-The planned backend uses thin FastAPI routes, application services, repositories, PostgreSQL with pgvector, and a separate PostgreSQL-backed worker. Gemini Flash is isolated behind a vision-provider interface, while sentence-transformers provides local embeddings.
+The implemented backend uses thin FastAPI routes, application services,
+workspace-scoped repositories, PostgreSQL with pgvector, and a separate
+PostgreSQL-backed worker. Gemini Flash is isolated behind a vision-provider
+interface, while sentence-transformers provides opt-in local embeddings and the
+reproducible acceptance path uses deterministic corpus-grounded providers.
 
 See [docs/design.md](docs/design.md) and [docs/architecture.md](docs/architecture.md) for the approved design.
 
@@ -61,7 +78,9 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 11 responsive Next.js product interface: implemented
 - Phase 12 hardening and deterministic demo readiness: implemented
 - Phase 12.5 authorization, tenant isolation, async embeddings, corpus, probes,
-  and metric correction: implemented and awaiting approval
+  and metric correction: complete
+- Phase 13 final requirement audit and submission packaging: prepared for final
+  submission
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -95,16 +114,15 @@ Docker is the reproducible path; global Python and Node packages are not used.
 From a clean machine:
 
 ```powershell
-git clone <repository-url>
-cd "Image Relevance & Auto-Tagging"
-Copy-Item .env.example .env
-# Generate one high-entropy local demo key and place the same value in
-# DEMO_API_KEY and NEXT_PUBLIC_API_KEY in the ignored .env file.
+git clone https://github.com/shaikinzamam/flyrank-capstone-image-relevance.git
+cd flyrank-capstone-image-relevance
+# Generate one high-entropy key for this PowerShell session. Compose passes the
+# same local-only value to the API seed and browser build; it is never committed.
 $bytes = New-Object byte[] 32
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $rng.GetBytes($bytes)
-'frk_' + [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
-# Also replace POSTGRES_PASSWORD before any non-local deployment.
+$env:DEMO_API_KEY = 'frk_' + [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+$env:NEXT_PUBLIC_API_KEY = $env:DEMO_API_KEY
 docker compose up --build -d
 docker compose ps
 docker compose exec -T api alembic current
@@ -112,7 +130,8 @@ docker compose exec -T api python -m scripts.seed
 docker compose exec -T api pytest
 ```
 
-The API entrypoint automatically runs `alembic upgrade head` before Uvicorn, so
+The evaluator uses `$env:DEMO_API_KEY` as `Authorization: Bearer
+<value>`. The API entrypoint automatically runs `alembic upgrade head` before Uvicorn, so
 the explicit `alembic current` command verifies migration state rather than
 applying a second migration. Open `http://localhost:3000`; the API is available
 at `http://localhost:8000`.
@@ -339,8 +358,19 @@ only the final structured report enters the normal application database.
 - Correct `NO_CONFIDENT_MATCH` outcomes: 7
 - Incorrect refusals: 0
 - Unsafe acceptances: 0
-- **Official top-1 precision: `0.3000`** (`3 / 10` evaluated posts)
-- **Issued-recommendation precision: `1.0000`** (`3 / 3` issued suggestions)
+
+#### Official top-1 precision
+
+Formula: correct first suggestion across all evaluated posts / all evaluated
+posts.
+
+Measured: `3 / 10 = 0.3000`.
+
+#### Issued-recommendation precision
+
+Formula: correct issued recommendations / all issued recommendations.
+
+Measured: `3 / 3 = 1.0000`.
 
 The official metric includes every evaluated post in its denominator; the issued
 precision answers the separate question of how often an actually issued
@@ -367,19 +397,20 @@ all 50 terminal successes. The separate known-vector Probe 2 ranks `red fox 1.00
 with `SUBJECT_MISMATCH`; Probe 4 persists `NO_CONFIDENT_MATCH`. Deterministic
 acceptance providers are clearly distinct from live Gemini/local-model behavior.
 
-UI walkthrough, using IDs printed by the seed command:
+The exact 5–6 minute reviewer walkthrough is in
+[docs/demo.md](docs/demo.md). The short UI path is:
 
 1. Open `http://localhost:3000/images`; inspect fox, wolf, and dog metadata and
    embedding state. Click a card for validated image bytes and full auto-tags.
 2. Open `http://localhost:3000/match` to inspect the guided create → embed → raw
    retrieval → guard workflow. The deterministic raw evidence is also printed by
    the seed manifest so the required ranking never depends on presentation timing.
-3. Open `http://localhost:3000/recommendations/<accepted_recommendation_id>`.
+3. Open `http://localhost:3000/recommendations/<recommendation_id>`, using
+   `human_review.recommendation_id` from the seed JSON.
    Verify the wolf rejection/fox acceptance evidence, enter a comment, and use
    Reject or Approve; the append-only timeline updates while evidence stays fixed.
-4. Open a value from `no_match_recommendation_ids` to verify that a guard-rejected
-   candidate has no approval control. The manifest's `no_match_reason` is
-   `NO_CONFIDENT_MATCH` for the wolf/dog-only run.
+4. In the matching workflow, run the seeded wolf-only/no-safe-candidate case and
+   verify `NO_CONFIDENT_MATCH` plus the candidate rejection explanation.
 5. Open `http://localhost:3000/evaluation`; verify 10 examples, 3 correct top-1,
    7 correct refusals, 0 unsafe acceptances, official top-1 `0.3000`, and issued
    precision `1.0000`.
@@ -391,7 +422,18 @@ vision response and incurs no external cost.
 
 ## Limitations
 
-- This is not a general-purpose image search engine and will target approximately 50 images.
+- Evaluation is deterministic and bounded to ten versioned acceptance fixtures.
+- The official top-1 score includes seven correct refusal cases in its denominator,
+  which is why it is `0.3000` even though issued-recommendation precision is
+  `1.0000`.
+- The licensed corpus contains approximately 50 images across five subjects.
+- Deterministic acceptance fixtures prove orchestration and safety behavior; they
+  are not equivalent to measuring live Gemini accuracy.
+- Local Docker Compose is the reproducible deployment baseline and submission
+  runtime; no public hosted deployment is claimed or required by the brief.
+- Provider behavior can vary outside deterministic tests, especially after model
+  or upstream API changes.
+- This is not a general-purpose image search engine.
 - The initial taxonomy covers only a small, documented set of subjects.
 - Model confidence is an input signal, not calibrated truth.
 - The baseline thresholds have not been tuned and ten deterministic fixtures are
@@ -404,3 +446,13 @@ vision response and incurs no external cost.
 - The budget guard is a total-demo cap. It atomically reserves the configured conservative estimated cost before every provider attempt; when budgeting is enabled, a missing estimate blocks the call.
 - Processing is at-least-once. Lease tokens prevent stale workers from completing reclaimed items, while the unique metadata row makes repeated processing persistence idempotent. A crash after a provider call can still require another billed call after lease recovery.
 - The premium frontend is presentation polish, not part of the backend correctness core.
+
+## Submission runtime
+
+Reproducible Docker Compose setup is the submission runtime.
+
+See [EVIDENCE.md](EVIDENCE.md) for the Definition-of-Done proof,
+[BUILDLOG.md](BUILDLOG.md) for chronological engineering history,
+[docs/submission-audit.md](docs/submission-audit.md) for the final requirement
+matrix, and [docs/interview-notes.md](docs/interview-notes.md) for concise design
+talking points.

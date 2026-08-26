@@ -3,36 +3,35 @@
 ## Component view
 
 ```text
-                    Next.js frontend
-              App Router | typed API client
-             Tailwind | Motion | CSS 3D
-                            |
-                            v
-                       FastAPI API
-                 auth | validation | HTTP
-                            |
-                            v
-                         Services
-          ingestion | matching | guard | review | eval
-                            |
-                            v
-                       Repositories
-                            |
-                            v
-                 PostgreSQL + pgvector
-                   ^                 ^
-                   |                 |
-         durable job records     vectors + domain data
-                   |
-                   |
-                 Worker
-                /      \
-               v        v
-     Gemini Vision    Embedding Service
-       Provider       sentence-transformers
-               \        /
-                v      v
-          AI call and cost logs
+Authenticated client (Next.js or API evaluator)
+                    |
+                    v
+             FastAPI auth + validation
+                    |
+                    v
+        workspace-scoped application services
+                    |
+                    v
+          workspace-scoped repositories
+                    |
+                    v
+             PostgreSQL + pgvector
+
+Image flow
+  durable PostgreSQL job -> worker -> vision provider -> Pydantic validation
+  -> metadata -> image embedding -> vector + per-call accounting
+
+Post flow
+  durable PostgreSQL job -> worker -> post embedding
+  -> vector + per-call accounting
+
+Matching and review
+  post vector -> pgvector retrieval -> deterministic mismatch guard
+  -> persisted recommendation or NO_CONFIDENT_MATCH -> append-only human review
+
+Evaluation
+  versioned labeled dataset -> real application services
+  -> persisted per-example evidence and aggregate metrics
 ```
 
 The mismatch guard is a deterministic service inside the application layer. It is not implemented by Gemini and cannot be bypassed by a high vector-similarity score.

@@ -647,3 +647,84 @@ This log records how AI assistance was used, which design choices were made, and
 - No OAuth, passwords, invitations, RBAC, external identity service, Redis,
   Celery, object-storage redesign, threshold tuning, label edits, or Phase 13
   submission packaging was added.
+
+## 2026-08-26 — Phase 13 final submission packaging
+
+### Official audit and documentation
+
+- Re-read the complete July 2026 FlyRank capstone PDF and mapped every core
+  Definition of Done item, shared requirement, acceptance probe, required
+  submission artifact, GitHub rule, deployment expectation, and stretch goal.
+- Reworked the README opening around the actual product behavior: raw semantic
+  proximity can place fox and wolf close together, while the deterministic guard
+  can still reject the wrong subject and return `NO_CONFIDENT_MATCH`.
+- Made the official `3 / 10 = 0.3000` top-1 formula and separate
+  `3 / 3 = 1.0000` issued-recommendation precision explicit, including seven
+  correct refusals, zero incorrect refusals, and zero unsafe acceptances.
+- Updated the architecture to show authenticated workspace-scoped application
+  layers, durable image/post flows, pgvector matching, the deterministic guard,
+  persisted review, per-call accounting, and evaluation through real services.
+- Finalized `capstone.yaml`, the Definition-of-Done evidence, this chronological
+  log, the official requirement matrix, a 5–6 minute demo walkthrough, and concise
+  interview talking points. No application behavior, thresholds, labels,
+  formulas, or recommendation decisions changed.
+
+### Corpus provenance correction
+
+- The final audit caught five `license_url: null` values that the earlier Phase
+  12.5 evidence had incorrectly treated as complete provenance.
+- Verified the current Wikimedia Commons pages and official MediaWiki API.
+  `red_fox_09` explicitly carries Public Domain Mark 1.0. The three wolf records
+  are explicitly public-domain U.S. Fish & Wildlife Service works whose Commons
+  pages link the FWS copyright policy.
+- `red_fox_02` had only an attribution-only permission and no defensible standard
+  license URL. Following the approved rule, replaced only that item with Commons
+  `File:Vulpes Vulpes in snow.jpg`, creator `peggycadigan`, explicitly licensed
+  CC BY 2.0. The existing downloader validated the 960-pixel JPEG and pinned
+  SHA-256 `657b3de1da0c50d0af1669bf597adc9e4153c087d13525ed55f28c25ddc432b6`.
+- No other corpus membership, filename, subject/category count, or image hash
+  changed. Final distribution remains 10 each for red fox, gray wolf, domestic
+  dog, brown bear, and white-tailed deer.
+- A full downloader pass verified all 50 files. An immediate rerun proved
+  resumability and immutability: 50 files before and after, zero changed, zero
+  added, zero hash failures, and zero empty required provenance fields.
+
+### Verification performed
+
+- Exact manifest commands passed after the documented ephemeral demo-key setup:
+  `docker compose up --build -d`, `docker compose exec -T api python -m
+  scripts.seed`, and `docker compose exec -T api pytest`.
+- The corrected-corpus seed completed 50/50, flagged one low-confidence record,
+  reproduced fox/wolf/dog `1.00/0.80/0.60`, returned readable
+  `SUBJECT_MISMATCH` and `NO_CONFIDENT_MATCH` evidence, recorded 107 calls, and
+  reported official/issued precision `0.3000/1.0000` with zero unsafe acceptances.
+- Backend: local `112 passed, 5 skipped`; exact Python 3.12 container command
+  `112 passed, 5 skipped`; explicitly enabled PostgreSQL/pgvector/concurrency
+  container suite `117 passed`.
+- Frontend: 11 Vitest checks, TypeScript, ESLint, optimized production build, and
+  full npm audit passed; npm reported zero vulnerabilities.
+- Database: live revision `0010 (head)` and `alembic check` reported no drift.
+- GitHub API confirmed the dedicated repository is public with default branch
+  `main`; remote and local approved history agree through `a0b81c1`.
+- Repository hygiene and secret scans found no tracked runtime/generated assets,
+  no absolute Windows paths, no private keys or populated Gemini/bearer secrets,
+  and only explicitly synthetic `frk_` test fixtures. CPU-only PyTorch remains
+  installed from the official CPU wheel index; no CUDA or Three.js stack exists.
+
+### Problems encountered
+
+- Wikimedia returned one `429` during an ad hoc replacement download. The
+  existing downloader's bounded backoff subsequently fetched and validated the
+  asset successfully.
+- The first corrected-corpus seed had one `provider_configuration` failure because
+  the already-running worker had cached the old manifest before the replacement.
+  Restarting only the worker reloaded the bind-mounted manifest; the unchanged
+  seed then passed 50/50. No code workaround or behavior change was introduced.
+- GitHub CLI was not installed. Public visibility was verified through GitHub's
+  public repository API, and `git ls-remote` verified the pushed `main` commit.
+
+### Intentionally not added
+
+- No hosted deployment, new provider, feature, threshold change, evaluation-label
+  edit, recommendation change, history rewrite, or screenshot tooling was added.
+  Docker Compose remains the reproducible submission runtime.

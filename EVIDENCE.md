@@ -1,6 +1,9 @@
 # Definition-of-Done Evidence
 
-Every item starts as **Pending**. Evidence will be added only after the corresponding command, test, request, log, or evaluation has actually been produced.
+Every completed item below is backed by an executed command, automated test,
+persisted record, response, migration, or acceptance transcript. Historical
+outputs are explicitly labeled when a later correction superseded their metric
+name.
 
 ## Phase 2 walking-skeleton verification
 
@@ -41,9 +44,10 @@ These checks establish infrastructure only and do not complete the feature-level
 
 ## Phase 9 labeled-evaluation verification
 
-- Baseline command output: 10 examples; 3 eligible; 3 correct top-1; 0 incorrect
-  top-1; 7 correct refusals; 0 incorrect refusals; 0 unsafe acceptances; top-1
-  precision `1.0000`.
+- Historical Phase 9 output reported `1.0000` using issued recommendations as the
+  denominator. Phase 12.5 corrected that name and formula: official all-post
+  top-1 is `0.3000`, while the historical calculation is now explicitly
+  issued-recommendation precision `1.0000`.
 - Per-example evidence records expected/actual results, selected fixture ID, guard
   decisions, reason codes, similarities, thresholds, and correctness.
 - Acceptance evidence includes higher-ranked wolf `0.93 -> SUBJECT_MISMATCH`, fox
@@ -76,8 +80,9 @@ These checks establish infrastructure only and do not complete the feature-level
   `[approved, rejected]`.
 - Live gray-wolf approval returned `409` for `SUBJECT_MISMATCH`. The uniquely
   identified live fixture and temporary SQL file were removed afterward.
-- Evaluation regression output remained top-1 precision `1.0000` with zero unsafe
-  acceptances. Rebuilt API/PostgreSQL were healthy and the worker was restored.
+- Historical Phase 10 evaluation output retained the then-used issued-only
+  `1.0000` calculation with zero unsafe acceptances; Phase 12.5 later renamed it
+  and added the official all-post `0.3000` metric.
 
 ## Phase 11 Next.js frontend verification
 
@@ -119,9 +124,11 @@ These checks establish infrastructure only and do not complete the feature-level
 - Final frontend results: 11 Vitest checks passed, including axe-core checks of
   representative landing, review, and evaluation views; strict TypeScript,
   ESLint, and the six-route optimized production build passed.
-- `evaluation-v1` remained 10 examples, 3 correct top-1, 0 incorrect top-1, 7
-  correct refusals, 0 incorrect refusals, 0 unsafe acceptances, and top-1
-  precision `1.0000`. Alembic reported revision `0009 (head)` and no drift.
+- `evaluation-v1` remained 10 examples, 3 correct issued recommendations, 7
+  correct refusals, 0 incorrect refusals, and 0 unsafe acceptances. The Phase 12
+  output still called the issued-only `1.0000` calculation top-1; Phase 12.5
+  corrected the official all-post metric to `0.3000`. Alembic reported revision
+  `0009 (head)` and no drift.
 - A volume-preserving `docker compose down` followed by the exact documented
   `docker compose up --build -d` completed without startup races. Database, API,
   and frontend became healthy; the worker started and remained running.
@@ -177,7 +184,44 @@ These checks establish infrastructure only and do not complete the feature-level
   schemas, or bearer/header/hash value in runtime logs. Stored demo credentials
   are 64-character digests, not `frk_` plaintext; one key is active and prior demo
   values are revoked.
-- Phase 13 submission packaging remains explicitly pending.
+
+## Phase 13 final submission verification
+
+- Re-read the full July 2026 official PDF and mapped every core Definition of
+  Done box, all eight shared requirements, all six probes, required files, GitHub
+  rules, and stretch items in `docs/submission-audit.md`. No mandatory failure
+  remains.
+- Corrected five incomplete corpus-provenance records against current Commons
+  metadata. One attribution-only fox image had no defensible standard license URL
+  and was replaced by a Commons red fox explicitly licensed CC BY 2.0; its new
+  bytes were validated and pinned as SHA-256
+  `657b3de1da0c50d0af1669bf597adc9e4153c087d13525ed55f28c25ddc432b6`.
+- The existing downloader fetched/validated the replacement and verified all 50
+  files through MIME, decode, format, byte-size, pixel, and hash rules. A second
+  rerun reported 50 verified, 50 files before/after, zero changed, zero added,
+  zero hash failures, and zero empty provenance fields.
+- The corrected acceptance seed completed 50/50 with 0 failures, 50 metadata
+  rows, 50 image vectors, 1 low-confidence record, and 107 provider-call records.
+  It reproduced Probe 2 `1.00/0.80/0.60`, Probe 3 `SUBJECT_MISMATCH` with a
+  readable explanation, Probe 4 `NO_CONFIDENT_MATCH`, official top-1 `0.3000`,
+  issued precision `1.0000`, and zero unsafe acceptances.
+- Exact `capstone.yaml` commands passed after the documented ephemeral demo-key
+  prerequisite: Compose startup, seed, and container test (`112 passed, 5
+  intentionally gated PostgreSQL tests skipped`). The explicitly enabled Python
+  3.12 PostgreSQL/pgvector/concurrency suite passed all `117` tests.
+- Local backend passed `112` with the same 5 PostgreSQL-only skips. Frontend
+  Vitest passed `11`; TypeScript, ESLint, production build, and full `npm audit`
+  passed, with zero vulnerabilities and all six product routes generated.
+- PostgreSQL is at Alembic `0010 (head)` and `alembic check` reports no drift.
+  Compose reports healthy database/API/frontend and a running worker.
+- GitHub's public API reports the dedicated repository public with default branch
+  `main`; `origin/main` and local `HEAD` both resolve to the approved Phase 12.5
+  commit `a0b81c1` before the intentionally uncommitted Phase 13 changes.
+- Hygiene found zero tracked runtime corpus files, uploads, `.env`, virtualenv,
+  `node_modules`, `.next`, caches, database dumps, or generated evaluation output;
+  zero absolute Windows paths; and no private key, populated Gemini key, or real
+  bearer value. Two `frk_` patterns are clearly synthetic test fixtures, and the
+  same test-only commit is the sole history pattern match.
 
 ## AI processing
 
@@ -257,7 +301,9 @@ These checks establish infrastructure only and do not complete the feature-level
   rejected-candidate `409`, immutable evidence, no provider/log calls, and no
   approvable candidate for `NO_CONFIDENT_MATCH`.
 - [x] **Phase 12.5 evidence — Reproducible setup:** The manifest pins 50 licensed Wikimedia files by SHA-256 and the downloader validates size, MIME, decoded format, pixel bounds, and source availability before the seed submits real jobs.
-- [ ] **Pending — Submission pack:** All required files are complete and the architecture diagram is current.
+- [x] **Phase 13 evidence — Submission pack:** All five required files are
+  complete, `capstone.yaml` commands are verified, the architecture diagram is
+  current, and reviewer demo/audit/interview notes are included under `docs/`.
 
 ## Acceptance probes
 
