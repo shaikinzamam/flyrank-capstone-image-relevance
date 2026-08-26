@@ -65,8 +65,8 @@ def test_valid_image_embedding_is_persisted_and_reused(
     image_api: ImageApiContext,
 ) -> None:
     image = upload_and_analyze(image_api)
-    first = image_api.client.post(f"/images/{image['id']}/embedding")
-    second = image_api.client.post(f"/images/{image['id']}/embedding")
+    first = image_api.client.post(f"/images/{image['id']}/embedding/debug-sync")
+    second = image_api.client.post(f"/images/{image['id']}/embedding/debug-sync")
 
     assert first.status_code == second.status_code == 200
     assert first.json()["dimensions"] == 384
@@ -84,7 +84,7 @@ def test_post_create_list_get_and_embedding_persistence(
     assert image_api.client.get(f"/posts/{post['id']}").json()["title"] == "Winter foxes"
     assert any(item["id"] == post["id"] for item in image_api.client.get("/posts").json())
 
-    embedded = image_api.client.post(f"/posts/{post['id']}/embedding")
+    embedded = image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync")
 
     assert embedded.status_code == 200
     assert embedded.json()["resource_type"] == "post"
@@ -100,14 +100,14 @@ def test_changed_post_content_regenerates_same_model_embedding(
     image_api: ImageApiContext,
 ) -> None:
     post = create_post(image_api)
-    first = image_api.client.post(f"/posts/{post['id']}/embedding").json()
+    first = image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync").json()
     with image_api.session_factory() as session:
         stored = session.get(Post, UUID(post["id"]))
         assert stored is not None
         stored.body = "The fox now runs across open snow."
         session.commit()
 
-    second = image_api.client.post(f"/posts/{post['id']}/embedding").json()
+    second = image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync").json()
 
     assert second["reused"] is False
     assert second["id"] == first["id"]
@@ -119,10 +119,10 @@ def test_model_version_change_creates_compatible_new_embedding(
     image_api: ImageApiContext,
 ) -> None:
     post = create_post(image_api)
-    first = image_api.client.post(f"/posts/{post['id']}/embedding").json()
+    first = image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync").json()
     image_api.embedding_provider._version = "2"
 
-    second = image_api.client.post(f"/posts/{post['id']}/embedding").json()
+    second = image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync").json()
 
     assert second["id"] != first["id"]
     assert second["embedding_version"] == "2"
@@ -136,11 +136,11 @@ def test_invalid_dimension_and_non_finite_vectors_are_rejected(
     first_post = create_post(image_api)
     image_api.embedding_provider.output = [0.1] * 383
     invalid_dimension = image_api.client.post(
-        f"/posts/{first_post['id']}/embedding"
+        f"/posts/{first_post['id']}/embedding/debug-sync"
     )
     second_post = create_post(image_api)
     image_api.embedding_provider.output = [0.1] * 383 + [nan]
-    non_finite = image_api.client.post(f"/posts/{second_post['id']}/embedding")
+    non_finite = image_api.client.post(f"/posts/{second_post['id']}/embedding/debug-sync")
 
     assert invalid_dimension.status_code == 502
     assert non_finite.status_code == 502
@@ -163,9 +163,9 @@ def test_missing_metadata_is_clean_and_low_confidence_remains_flagged(
     uploaded = image_api.client.post(
         "/images", files={"file": ("missing.png", buffer.getvalue(), "image/png")}
     ).json()
-    missing = image_api.client.post(f"/images/{uploaded['id']}/embedding")
+    missing = image_api.client.post(f"/images/{uploaded['id']}/embedding/debug-sync")
     low = upload_and_analyze(image_api, confidence=0.69)
-    embedded = image_api.client.post(f"/images/{low['id']}/embedding")
+    embedded = image_api.client.post(f"/images/{low['id']}/embedding/debug-sync")
 
     assert missing.status_code == 409
     assert missing.json() == {"detail": "Image metadata is missing"}
@@ -177,10 +177,10 @@ def test_embedding_call_is_zero_cost_and_provider_failure_persists_no_vector(
     image_api: ImageApiContext,
 ) -> None:
     successful_post = create_post(image_api)
-    assert image_api.client.post(f"/posts/{successful_post['id']}/embedding").status_code == 200
+    assert image_api.client.post(f"/posts/{successful_post['id']}/embedding/debug-sync").status_code == 200
     failing_post = create_post(image_api)
     image_api.embedding_provider.output = EmbeddingProviderError("boom")
-    failed = image_api.client.post(f"/posts/{failing_post['id']}/embedding")
+    failed = image_api.client.post(f"/posts/{failing_post['id']}/embedding/debug-sync")
 
     assert failed.status_code == 503
     with image_api.session_factory() as session:
@@ -200,7 +200,7 @@ def test_embedding_call_is_zero_cost_and_provider_failure_persists_no_vector(
 
 def test_missing_post_returns_404(image_api: ImageApiContext) -> None:
     post_id = uuid4()
-    response = image_api.client.post(f"/posts/{post_id}/embedding")
+    response = image_api.client.post(f"/posts/{post_id}/embedding/debug-sync")
     detail = image_api.client.get(f"/posts/{post_id}")
 
     assert response.status_code == 404

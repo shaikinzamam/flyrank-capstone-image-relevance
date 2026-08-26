@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.models.embedding import PostEmbedding
 from app.models.post import Post
+from app.models.workspace import Workspace
+from tests.conftest import create_postgres_workspace
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_POSTGRES_PGVECTOR") != "1",
@@ -19,9 +21,11 @@ def test_pgvector_value_round_trips_with_expected_dimensions() -> None:
     post_id = uuid4()
     embedding_id = uuid4()
     vector = [float(index) / 384 for index in range(384)]
+    workspace_id = None
     try:
         with Session(engine) as session:
-            session.add(Post(id=post_id, title="pgvector check", body="round trip"))
+            workspace_id = create_postgres_workspace(session, "vector-pg")
+            session.add(Post(workspace_id=workspace_id, id=post_id, title="pgvector check", body="round trip"))
             session.add(
                 PostEmbedding(
                     id=embedding_id,
@@ -43,6 +47,7 @@ def test_pgvector_value_round_trips_with_expected_dimensions() -> None:
             assert list(stored.vector) == pytest.approx(vector, abs=1e-6)
     finally:
         with Session(engine) as session:
-            session.execute(delete(Post).where(Post.id == post_id))
+            if workspace_id is not None:
+                session.execute(delete(Workspace).where(Workspace.id == workspace_id))
             session.commit()
         engine.dispose()

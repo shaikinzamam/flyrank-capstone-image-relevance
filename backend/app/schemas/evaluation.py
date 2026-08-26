@@ -118,6 +118,7 @@ class EvaluationReport(BaseModel):
     unsafe_acceptance_count: int
     correct_safe_rejections: int
     top1_precision: float
+    issued_recommendation_precision: float
     safe_acceptance_precision: float
     unsafe_rejection_recall: float
     per_category: dict[str, CategoryEvaluationResult]

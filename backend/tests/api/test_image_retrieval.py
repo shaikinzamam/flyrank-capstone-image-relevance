@@ -47,7 +47,7 @@ def create_post(
     post = response.json()
     if embed:
         context.embedding_provider.output = post_vector or vector(1.0)
-        embedded = context.client.post(f"/posts/{post['id']}/embedding")
+        embedded = context.client.post(f"/posts/{post['id']}/embedding/debug-sync")
         assert embedded.status_code == 200
     return post
 
@@ -87,7 +87,7 @@ def create_image(
     assert analyzed.status_code == 200
     context.embedding_provider.output = embedding_vector
     embedded = context.client.post(
-        f"/images/{uploaded.json()['id']}/embedding"
+        f"/images/{uploaded.json()['id']}/embedding/debug-sync"
     )
     assert embedded.status_code == 200
     return uploaded.json()

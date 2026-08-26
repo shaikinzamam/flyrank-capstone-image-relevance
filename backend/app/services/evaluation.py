@@ -15,6 +15,7 @@ from app.models.image_asset import ImageAsset
 from app.models.image_metadata import ImageMetadata
 from app.models.post import Post
 from app.models.recommendation import GuardDecision, Recommendation
+from app.models.workspace import Workspace
 from app.providers.embedding import FakeEmbeddingProvider
 from app.repositories.embeddings import EmbeddingRepository
 from app.repositories.evaluations import EvaluationRepository
@@ -135,7 +136,8 @@ class EvaluationEngine:
             candidate.decision != GuardDecision.ACCEPTED for candidate in unsafe
         )
         issued_recommendations = correct_top1 + incorrect_top1
-        top1_precision = (
+        top1_precision = correct_top1 / len(examples) if examples else 0.0
+        issued_recommendation_precision = (
             correct_top1 / issued_recommendations if issued_recommendations else 0.0
         )
         safe_acceptance_precision = (
@@ -173,6 +175,7 @@ class EvaluationEngine:
             unsafe_acceptance_count=unsafe_acceptances,
             correct_safe_rejections=safe_rejections,
             top1_precision=top1_precision,
+            issued_recommendation_precision=issued_recommendation_precision,
             safe_acceptance_precision=safe_acceptance_precision,
             unsafe_rejection_recall=unsafe_rejection_recall,
             per_category=per_category,
@@ -192,7 +195,10 @@ class EvaluationEngine:
     def _run_pipeline(
         self, session: Session, example: EvaluationExample
     ) -> ExampleEvaluationResult:
-        posts = PostRepository(session)
+        workspace = Workspace(name=f"Evaluation {example.example_id}")
+        session.add(workspace)
+        session.commit()
+        posts = PostRepository(session, workspace.id)
         post = Post(
             title=example.article_title,
             body=example.article_body,
@@ -207,9 +213,9 @@ class EvaluationEngine:
             version=EVALUATION_EMBEDDING_VERSION,
         )
         embeddings = EmbeddingService(
-            EmbeddingRepository(session),
-            ImageAssetRepository(session),
-            ImageMetadataRepository(session),
+            EmbeddingRepository(session, workspace.id),
+            ImageAssetRepository(session, workspace.id),
+            ImageMetadataRepository(session, workspace.id),
             posts,
             provider,
         )
@@ -226,6 +232,7 @@ class EvaluationEngine:
             ).hexdigest()
             session.add(
                 ImageAsset(
+                    workspace_id=workspace.id,
                     id=image_id,
                     filename=f"{candidate.fixture_image_id}.png",
                     storage_key=f"evaluation/{digest}.png",
@@ -258,7 +265,7 @@ class EvaluationEngine:
             embeddings.embed_image(image_id)
         retrieval = ImageRetrievalService(
             posts,
-            ImageRetrievalRepository(session),
+            ImageRetrievalRepository(session, workspace.id),
             embedding_model=provider.model_name,
             embedding_version=provider.model_version,
             dimensions=provider.dimensions,
@@ -266,7 +273,7 @@ class EvaluationEngine:
         response = RecommendationService(
             posts,
             retrieval,
-            RecommendationRepository(session),
+            RecommendationRepository(session, workspace.id),
         ).create(post.id, top_k=len(example.candidates))
         persisted = list(
             session.scalars(
@@ -355,6 +362,9 @@ class EvaluationService:
                 safe_rejections=report.correct_safe_rejections,
                 unsafe_acceptances=report.unsafe_acceptance_count,
                 top1_precision=report.top1_precision,
+                issued_recommendation_precision=(
+                    report.issued_recommendation_precision
+                ),
                 report_json=report.model_dump(mode="json"),
             )
         )
@@ -374,7 +384,13 @@ class EvaluationService:
 
     @staticmethod
     def _response(run: EvaluationRun) -> EvaluationRunResponse:
-        report = EvaluationReport.model_validate(run.report_json)
+        payload = dict(run.report_json)
+        if "issued_recommendation_precision" not in payload:
+            payload["issued_recommendation_precision"] = payload["top1_precision"]
+            payload["top1_precision"] = (
+                payload["correct_top1"] / payload["total_examples"]
+            )
+        report = EvaluationReport.model_validate(payload)
         return EvaluationRunResponse(
             **report.model_dump(), run_id=run.id, created_at=run.created_at
         )

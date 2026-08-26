@@ -136,6 +136,49 @@ These checks establish infrastructure only and do not complete the feature-level
   pixels. Each measured document width stayed within its viewport; the 375 pass
   exposed the mobile menu and retained zero horizontal overflow.
 
+## Phase 12.5 corrective verification
+
+- Migration `0010` upgraded the preserved development database from `0009` and
+  backfilled existing rows into a fixed legacy workspace. A disposable PostgreSQL
+  database passed `upgrade head -> downgrade 0009 -> upgrade head`; `alembic
+  check` reported no new operations.
+- Missing/invalid bearer tests return `401`; health/readiness remain public. Two
+  independent workspaces can store identical image bytes, while lists and every
+  tested read/mutation boundary conceal foreign IDs with `404`.
+- Async tests prove vision precedes image embedding, embedding persistence precedes
+  item success, transient embedding failures retry without a second vision call,
+  permanent vector failures terminate, lease recovery remains safe, post
+  embedding returns `202`, and idempotent retries reuse the job.
+- The manifest contains 50 distinct Wikimedia Commons source pages and pinned
+  file hashes. The acceptance run completed 50/50 items, persisted 50 metadata
+  rows and 50 image embeddings, flagged one deterministic low-confidence record,
+  and produced 107 durable workspace-scoped provider-call records.
+- Probe 2 produced red fox `1.00`, gray wolf `0.80`, and domestic dog `0.60` from
+  stored vectors. Probe 3 rejected the isolated wolf as `SUBJECT_MISMATCH`; Probe
+  4 returned `NO_CONFIDENT_MATCH` with no recommendation.
+- The unchanged `evaluation-v1` labels and `phase8-v1` thresholds produce official
+  top-1 `0.3000`, issued-recommendation precision `1.0000`, seven correct
+  refusals, zero incorrect refusals, and zero unsafe acceptances.
+- Final backend matrix: local `112 passed, 5 skipped`; PostgreSQL integration
+  slice `5 passed`; Python 3.12 container with PostgreSQL/pgvector/concurrency
+  enabled `117 passed`. Focused auth/tenant and accounting modules passed `4/4`
+  and `5/5` respectively.
+- Final frontend matrix: Vitest `11 passed`; TypeScript and ESLint passed; the
+  optimized production build compiled, typechecked, generated six routes, and
+  finalized successfully.
+- Live auth returned health/readiness `200`, missing/invalid credentials `401`,
+  and a masked valid credential `200`. Twelve cross-workspace operations returned
+  `404`, tenant lists were isolated, and the temporary fixtures were cleaned.
+- Live PostgreSQL is at `0010 (head)`, has no Alembic drift, and exposes the
+  expected workspace foreign keys/indexes plus workspace-scoped SHA and
+  idempotency uniqueness. Docker reports database/API/frontend healthy and worker
+  running.
+- Secret checks found no tracked `.env`, private key, credential hash in response
+  schemas, or bearer/header/hash value in runtime logs. Stored demo credentials
+  are 64-character digests, not `frk_` plaintext; one key is active and prior demo
+  values are revoked.
+- Phase 13 submission packaging remains explicitly pending.
+
 ## AI processing
 
 - [x] **Phase 4 evidence — Structured output:** Gemini is isolated behind `VisionProvider`; all returned JSON is validated locally by strict Pydantic rules before the single metadata row is inserted or replaced. Deterministic tests reject malformed JSON, missing fields, invalid confidence, blank tags, unknown taxonomy values, and inconsistent taxonomy combinations; the schema also forbids extra fields.
@@ -174,15 +217,15 @@ These checks establish infrastructure only and do not complete the feature-level
 - [x] **Phase 10 evidence — Review persistence:** Migration `0009` adds constrained,
   indexed, append-only reviews with a recommendation foreign key and nullable
   future reviewer identity.
-- [ ] **Pending — API validation:** Endpoint input is validated and bad requests produce clean 4xx responses.
+- [x] **Phase 12.5 evidence — API validation:** Endpoint input and bearer credentials are validated; malformed, unauthorized, missing, conflict, and cross-workspace requests produce clean 4xx responses.
 - [x] **Phase 10 evidence — Review workflow:** Typed endpoints inspect evidence,
   approve/reject accepted candidates, persist comments, expose state/history, and
   reject safety-boundary bypasses with `409`.
-- [ ] **Pending — Authorization:** Minimum real authentication and authorization protect non-public endpoints.
-- [ ] **Pending — Tenant isolation:** Cross-workspace access is prevented and tested.
+- [x] **Phase 12.5 evidence — Authorization:** Persisted hashed bearer keys protect every application endpoint while health/readiness remain public; missing and invalid tokens return `401`.
+- [x] **Phase 12.5 evidence — Tenant isolation:** Repository queries are workspace-scoped and two-workspace tests prove lists, reads, content, jobs, posts, retrieval, recommendations, review, evaluations, and mutations cannot cross the boundary.
 - [x] **Phase 5 evidence — Idempotency:** Reusing an idempotency key with the same image set returns the same job; using it with a different set returns `409`. Job/image uniqueness and metadata upsert constraints prevent duplicate durable rows.
 - [x] **Phase 5 evidence — Failure handling:** Transient failures retry with capped exponential backoff; permanent and exhausted failures are visible on items and aggregate into job terminal status and failure summary. Expired leases are reclaimable.
-- [x] **Phase 5 evidence — Vision budget guard:** A PostgreSQL-serialized total-demo budget reservation runs before provider calls; deterministic tests prove exhaustion prevents the provider invocation. Embedding budget accounting remains future work.
+- [x] **Phase 5/12.5 evidence — Vision budget and call accounting:** A PostgreSQL-serialized total-demo vision budget reservation runs before provider calls; every actual vision/image-embedding/post-embedding invocation records a workspace-scoped success or failure, while reuse creates no fictitious call.
 
 ## Quality and documentation
 
@@ -191,9 +234,7 @@ These checks establish infrastructure only and do not complete the feature-level
   fox-versus-wolf rejection, decision order, low confidence/similarity, category,
   required tags, invalid metadata, explanations, refusal, persistence, and no
   provider/log calls.
-- [ ] **Partial — Matching tests:** Automated tests cover deterministic guard
-  behavior and equivalent concepts; the Phase 9 labeled baseline now covers all
-  declared matching cases, while broader corpus accuracy remains future work.
+- [x] **Phase 12.5 evidence — Matching tests:** Automated tests cover deterministic guard behavior, equivalent concepts, the licensed batch, known-vector fox/wolf/dog order, forced mismatch, and safe refusal. This bounded evidence is not a general-world accuracy claim.
 - [x] **Phase 5 evidence — Resilience tests:** Tests cover provider failure, successful retry, permanent failure, exhaustion, active-lease exclusion, expired-lease recovery, idempotent job requests, budget denial, inaccessible storage, and real PostgreSQL concurrent claiming.
 - [x] **Phase 6 evidence — Embedding tests:** Deterministic tests cover semantic
   text, image/post persistence, reuse and regeneration, compatible version changes,
@@ -208,23 +249,23 @@ These checks establish infrastructure only and do not complete the feature-level
   top-1 recommendations, 0 incorrect top-1 recommendations, 7 correct refusals,
   0 incorrect refusals, 10 correct unsafe-candidate rejections, and 0 unsafe
   acceptances under unchanged `phase8-v1`.
-- [x] **Phase 9 evidence — README metric:** CLI output and README both report
-  top-1 precision `1.0000`, defined as `3 / (3 + 0)` issued recommendations.
+- [x] **Phase 12.5 evidence — Corrected README metric:** Database, API, CLI,
+  frontend, tests, and README report official top-1 `3 / 10 = 0.3000` and the
+  separate issued-recommendation precision `3 / 3 = 1.0000`.
 - [x] **Phase 10 evidence — Review tests:** Tests prove pending, approve, reject,
   comments, idempotent retry, conflicting append-only history, missing `404`,
   rejected-candidate `409`, immutable evidence, no provider/log calls, and no
   approvable candidate for `NO_CONFIDENT_MATCH`.
-- [ ] **Pending — Reproducible setup:** A clean machine can run and seed the application using documented commands.
+- [x] **Phase 12.5 evidence — Reproducible setup:** The manifest pins 50 licensed Wikimedia files by SHA-256 and the downloader validates size, MIME, decoded format, pixel bounds, and source availability before the seed submits real jobs.
 - [ ] **Pending — Submission pack:** All required files are complete and the architecture diagram is current.
 
 ## Acceptance probes
 
-- [ ] **Pending — Probe 1:** Batch processing gives every corpus image schema-valid metadata and flags at least one low-confidence result.
-- [ ] **Pending — Probe 2:** A red-fox article ranks a fox first and ranks wolf and dog clearly lower.
+- [x] **Phase 12.5 evidence — Probe 1:** One background batch completed 50/50 with 50 metadata rows, 50 asynchronous image embeddings, visible progress, and one deterministic low-confidence flag.
+- [x] **Phase 12.5 evidence — Probe 2:** Inserted normalized vectors rank red fox `1.00`, gray wolf `0.80`, and domestic dog `0.60` for the red-fox article.
 - [x] **Phase 8 evidence — Probe 3:** A forced higher-ranked wolf is rejected with
   `SUBJECT_MISMATCH` and an expected-red-fox/detected-gray-wolf explanation.
 - [x] **Phase 8 evidence — Probe 4:** A post with only wolf and dog returns
   `NO_CONFIDENT_MATCH` and per-candidate reasons.
-- [x] **Phase 9 evidence — Probe 5:** `python -m scripts.evaluate` reports dataset
-  `evaluation-v1`, 10 examples, and top-1 precision `1.0000`, matching README.
-- [ ] **Pending — Probe 6:** Every vision and embedding call has a corresponding cost-log entry.
+- [x] **Phase 12.5 evidence — Probe 5:** `python -m scripts.evaluate` reports dataset `evaluation-v1`, 10 examples, official top-1 `0.3000`, issued precision `1.0000`, and zero unsafe acceptances, matching README.
+- [x] **Phase 12.5 evidence — Probe 6:** Seed evidence contains 107 workspace-scoped call records for 50 vision, 50 corpus image embeddings, one async post embedding, and six deterministic probe embedding invocations.

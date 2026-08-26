@@ -17,29 +17,42 @@ from app.models.processing_job import (
 class ClaimedJobItem:
     id: UUID
     job_id: UUID
-    image_id: UUID
+    workspace_id: UUID
+    job_type: str
+    image_id: UUID | None
+    post_id: UUID | None
     attempt_count: int
     max_attempts: int
     lease_token: UUID
 
 
 class ProcessingJobRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, workspace_id: UUID | None = None) -> None:
         self._session = session
+        self.workspace_id = workspace_id
+
+    def _scope(self):
+        return () if self.workspace_id is None else (ProcessingJob.workspace_id == self.workspace_id,)
 
     def get(self, job_id: UUID) -> ProcessingJob | None:
-        return self._session.get(ProcessingJob, job_id)
+        return self._session.scalar(
+            select(ProcessingJob).where(ProcessingJob.id == job_id, *self._scope())
+        )
 
     def get_by_idempotency_key(self, key: str) -> ProcessingJob | None:
         return self._session.scalar(
-            select(ProcessingJob).where(ProcessingJob.idempotency_key == key)
+            select(ProcessingJob).where(
+                ProcessingJob.idempotency_key == key, *self._scope()
+            )
         )
 
     def list_items(self, job_id: UUID) -> list[ProcessingJobItem]:
         return list(
             self._session.scalars(
                 select(ProcessingJobItem)
+                .join(ProcessingJob)
                 .where(ProcessingJobItem.job_id == job_id)
+                .where(*self._scope())
                 .order_by(ProcessingJobItem.id)
             )
         )
@@ -48,12 +61,30 @@ class ProcessingJobRepository:
         return set(
             self._session.scalars(
                 select(ProcessingJobItem.image_id).where(
-                    ProcessingJobItem.job_id == job_id
+                    ProcessingJobItem.job_id == job_id,
+                    ProcessingJobItem.image_id.is_not(None),
+                )
+                .join(ProcessingJob)
+                .where(*self._scope())
+            )
+        )
+
+    def post_ids(self, job_id: UUID) -> set[UUID]:
+        return set(
+            self._session.scalars(
+                select(ProcessingJobItem.post_id)
+                .join(ProcessingJob)
+                .where(
+                    ProcessingJobItem.job_id == job_id,
+                    ProcessingJobItem.post_id.is_not(None),
+                    *self._scope(),
                 )
             )
         )
 
     def add(self, job: ProcessingJob) -> None:
+        if self.workspace_id is not None:
+            job.workspace_id = self.workspace_id
         self._session.add(job)
 
     def commit(self) -> None:
@@ -108,15 +139,20 @@ class ProcessingJobRepository:
         item.lease_token = token
 
         job = self._session.get(ProcessingJob, item.job_id)
-        if job is not None:
-            job.status = JobStatus.RUNNING.value
-            job.started_at = job.started_at or now
-            job.completed_at = None
+        if job is None:  # Foreign key integrity makes this unreachable.
+            self._session.rollback()
+            return None
+        job.status = JobStatus.RUNNING.value
+        job.started_at = job.started_at or now
+        job.completed_at = None
         self._session.commit()
         return ClaimedJobItem(
             id=item.id,
             job_id=item.job_id,
+            workspace_id=job.workspace_id,
+            job_type=job.job_type,
             image_id=item.image_id,
+            post_id=item.post_id,
             attempt_count=item.attempt_count,
             max_attempts=item.max_attempts,
             lease_token=token,

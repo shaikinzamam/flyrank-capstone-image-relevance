@@ -28,7 +28,7 @@ The initial corpus will contain approximately 50 licensed-free images across a f
 
 This is a target shape, not a requirement for exactly ten images per subject. A compact corpus makes model output inspectable and enables a carefully labeled evaluation set.
 
-The backend includes validated ingestion, vision metadata, embeddings, ranking, a deterministic guard, durable jobs, cost records, a minimal review workflow, and evaluation. Authentication and workspace isolation will be implemented only to the level needed for real authorization and cross-workspace protection.
+The backend includes validated ingestion, vision metadata, embeddings, ranking, a deterministic guard, durable jobs, cost records, a minimal review workflow, evaluation, persisted bearer-key authentication, and workspace isolation.
 
 ## Explicit non-goals
 
@@ -177,7 +177,13 @@ cannot receive either action, preventing a mismatch or safe refusal bypass.
 
 The API persists processing jobs and item records, then returns `202` without waiting for AI work. A separate worker claims available items using PostgreSQL row locking with `SKIP LOCKED` and expiring leases. It maintains attempts, progress, terminal errors, and retry schedules. Leases are configured longer than provider timeouts; an abandoned lease is reclaimed without relying on an in-process heartbeat.
 
-Content hashes, unique constraints, exact-image-set idempotency keys, lease tokens, and the one-row metadata upsert prevent duplicate durable effects under request retries and at-least-once execution. Every vision attempt, including failures and zero-cost fake calls, creates an attributed call record. The configurable total-demo budget atomically reserves an operator-supplied conservative cost estimate before provider calls. Embedding accounting remains future work.
+Content hashes, workspace-scoped unique constraints, exact-image-set idempotency
+keys, lease tokens, and the one-row metadata upsert prevent duplicate durable
+effects under request retries and at-least-once execution. Every real vision or
+embedding provider invocation, including failures and zero-cost deterministic
+calls, creates a workspace-attributed accounting record. Reuse without invocation
+does not create a fictitious call. The configurable total-demo vision budget
+atomically reserves an operator-supplied conservative estimate before calls.
 
 Redis and Celery are unnecessary for the bounded workload and are not part of the initial design.
 
@@ -198,9 +204,28 @@ values before persistence. Flagged low-confidence metadata is embeddable but
 remains flagged for the future guard. Exact search is deferred with ranking; no
 HNSW or FAISS index is introduced.
 
+Phase 12.5 makes the normal embedding path asynchronous without adding another
+queue. An `image_processing` item succeeds only after vision, validated metadata,
+and image embedding persistence. A transient embedding failure retries while
+reusing already-valid metadata, so vision is not called again; permanent vector
+validation/configuration failures terminate cleanly. A `post_embedding` job uses
+the same PostgreSQL lease/claim/retry machinery. Synchronous endpoints remain only
+as deprecated, explicitly named development diagnostics.
+
 ## Authentication and workspace isolation
 
-The implementation will use the minimum real authentication mechanism needed by the capstone. All owned records will carry a workspace identifier, authorization will be enforced at the boundary and repository query level, and automated tests will attempt cross-workspace access.
+The implemented boundary accepts `Authorization: Bearer <api-key>`, hashes the
+high-entropy secret with SHA-256, stores only that digest plus a non-secret prefix,
+and uses constant-time digest comparison. SHA-256 is appropriate here because the
+input is a random 256-bit bearer secret rather than a human password. Health and
+readiness remain public; all tenant-owned routes resolve an authenticated
+workspace. Foreign-workspace IDs behave as absent (`404`).
+
+Top-level owned records carry `workspace_id`; child ownership is derived through
+foreign keys where duplication would create inconsistent authority. Repository
+queries scope reads and writes by workspace. Image-content hashes and job
+idempotency keys are unique within a workspace, allowing different tenants to
+upload identical bytes and reuse the same idempotency string independently.
 
 OAuth, complex RBAC, invitations, email workflows, and general account-management features are explicitly excluded.
 
@@ -232,17 +257,17 @@ corpus. `EvaluationService` persists only the final report to `evaluation_runs`.
 
 Metric formulas:
 
-- top-1 precision = correct acceptable issued recommendations / all issued recommendations
+- official top-1 precision = correct first suggestions / all evaluated posts
+- issued-recommendation precision = correct issued suggestions / all issued suggestions
 - safe acceptance precision = accepted candidates labeled acceptable / all accepted candidates
 - unsafe rejection recall = unsafe candidates rejected / all labeled unsafe candidates
 - incorrect refusal = expected recommendation with `NO_CONFIDENT_MATCH`
 - correct no-match = expected `NO_CONFIDENT_MATCH` with no selected image
 
-The project-local materials do not contain the PDF's mathematical formula, so the
-standard precision interpretation above is documented explicitly. Refusals are
-reported separately and are not folded into precision. Baseline `evaluation-v1`
-under unchanged `phase8-v1` produced `3/3` correct issued recommendations,
-`7/7` correct refusals, zero unsafe acceptances, and top-1 precision `1.0000`.
+Baseline `evaluation-v1` under unchanged `phase8-v1` produced `3/10` official
+top-1 precision (`0.3000`), `3/3` issued-recommendation precision (`1.0000`),
+`7/7` correct refusals, and zero unsafe acceptances. Labels, guard ordering, and
+thresholds were not changed for the metric correction.
 
 ## Main risks
 
@@ -263,11 +288,13 @@ and decoded supported image format. Upload validation continues to enforce
 streamed byte and decoded-pixel limits.
 
 Browser access uses a comma-separated list of explicit HTTP(S) origins. Wildcard
-origins are rejected, credentials are disabled, and only GET, POST, OPTIONS, and
-the `Content-Type` request header are allowed.
+origins are rejected, cookies are disabled, and only GET, POST, OPTIONS plus the
+`Authorization` and `Content-Type` request headers are allowed.
 
-The deterministic evaluator seed uses generated, visibly labeled synthetic
-assets and a seed-only known-vector fixture. It makes no third-party licensing
-claim and does not alter production providers, thresholds, guard behavior, or
-evaluation labels. Repeated seeds replace only the reserved Phase 12 filename and
-post-title prefixes.
+The Phase 12.5 acceptance seed uses 50 Wikimedia Commons assets whose source page,
+download URL, creator, license, attribution URL, local name, and SHA-256 are pinned
+in `data/corpus-manifest.json`. Downloads are validated through the normal image
+rules. A corpus-grounded deterministic provider supplies reproducible acceptance
+metadata, including one declared low-confidence fixture. Separate known vectors
+prove fox/wolf/dog ordering without changing production responses, guard behavior,
+thresholds, or evaluation labels.

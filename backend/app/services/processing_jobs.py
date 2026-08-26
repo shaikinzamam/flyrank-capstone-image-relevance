@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app.models.processing_job import ProcessingJob, ProcessingJobItem
 from app.repositories.image_assets import ImageAssetRepository
 from app.repositories.processing_jobs import ProcessingJobRepository
+from app.repositories.posts import PostRepository
 
 
 class ProcessingJobNotFoundError(Exception):
@@ -12,6 +13,10 @@ class ProcessingJobNotFoundError(Exception):
 
 
 class ProcessingImagesNotFoundError(Exception):
+    pass
+
+
+class ProcessingPostNotFoundError(Exception):
     pass
 
 
@@ -24,11 +29,13 @@ class ProcessingJobService:
         self,
         jobs: ProcessingJobRepository,
         images: ImageAssetRepository,
+        posts: PostRepository,
         *,
         max_attempts: int,
     ) -> None:
         self._jobs = jobs
         self._images = images
+        self._posts = posts
         self._max_attempts = max_attempts
 
     def create(
@@ -50,6 +57,7 @@ class ProcessingJobService:
             )
 
         job = ProcessingJob(
+            job_type="image_processing",
             total_items=len(image_ids),
             idempotency_key=idempotency_key,
             items=[
@@ -70,6 +78,48 @@ class ProcessingJobService:
         self._jobs.refresh(job)
         return job, False
 
+    def create_post_embedding(
+        self, post_id: UUID, *, idempotency_key: str
+    ) -> tuple[ProcessingJob, bool]:
+        existing = self._jobs.get_by_idempotency_key(idempotency_key)
+        if existing is not None:
+            if (
+                existing.job_type != "post_embedding"
+                or self._jobs.post_ids(existing.id) != {post_id}
+            ):
+                raise IdempotencyConflictError(
+                    "Idempotency key was already used for a different request"
+                )
+            return existing, True
+        if self._posts.get(post_id) is None:
+            raise ProcessingPostNotFoundError("Post not found")
+        job = ProcessingJob(
+            job_type="post_embedding",
+            total_items=1,
+            idempotency_key=idempotency_key,
+            items=[
+                ProcessingJobItem(post_id=post_id, max_attempts=self._max_attempts)
+            ],
+        )
+        self._jobs.add(job)
+        try:
+            self._jobs.commit()
+        except IntegrityError:
+            self._jobs.rollback()
+            existing = self._jobs.get_by_idempotency_key(idempotency_key)
+            if existing is None:
+                raise
+            if (
+                existing.job_type != "post_embedding"
+                or self._jobs.post_ids(existing.id) != {post_id}
+            ):
+                raise IdempotencyConflictError(
+                    "Idempotency key was already used for a different request"
+                )
+            return existing, True
+        self._jobs.refresh(job)
+        return job, False
+
     def get(self, job_id: UUID) -> ProcessingJob:
         job = self._jobs.get(job_id)
         if job is None:
@@ -84,7 +134,10 @@ class ProcessingJobService:
     def _verify_same_request(
         self, existing: ProcessingJob, image_ids: list[UUID]
     ) -> None:
-        if self._jobs.image_ids(existing.id) != set(image_ids):
+        if (
+            existing.job_type != "image_processing"
+            or self._jobs.image_ids(existing.id) != set(image_ids)
+        ):
             raise IdempotencyConflictError(
                 "Idempotency key was already used for a different image set"
             )

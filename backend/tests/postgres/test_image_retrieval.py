@@ -9,9 +9,11 @@ from app.models.embedding import ImageEmbedding, PostEmbedding
 from app.models.image_asset import ImageAsset
 from app.models.image_metadata import ImageMetadata
 from app.models.post import Post
+from app.models.workspace import Workspace
 from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.repositories.posts import PostRepository
 from app.services.image_retrieval import ImageRetrievalService
+from tests.conftest import create_postgres_workspace
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_POSTGRES_PGVECTOR") != "1",
@@ -34,10 +36,12 @@ def test_postgresql_pgvector_cosine_query_ranks_known_vectors() -> None:
     image_ids = [uuid4() for _ in subjects]
     model = "known-vector-ranking-test"
     version = "1"
+    workspace_id = None
     try:
         with Session(engine) as session:
+            workspace_id = create_postgres_workspace(session, "retrieval-pg")
             session.add(
-                Post(id=post_id, title="Winter foxes", body="Red fox survival")
+                Post(workspace_id=workspace_id, id=post_id, title="Winter foxes", body="Red fox survival")
             )
             session.add(
                 PostEmbedding(
@@ -56,6 +60,7 @@ def test_postgresql_pgvector_cosine_query_ranks_known_vectors() -> None:
                 token = uuid4().hex
                 session.add(
                     ImageAsset(
+                        workspace_id=workspace_id,
                         id=image_id,
                         filename=f"{subject_code}.png",
                         storage_key=f"ranking/{token}.png",
@@ -97,8 +102,8 @@ def test_postgresql_pgvector_cosine_query_ranks_known_vectors() -> None:
 
         with Session(engine) as session:
             service = ImageRetrievalService(
-                PostRepository(session),
-                ImageRetrievalRepository(session),
+                PostRepository(session, workspace_id),
+                ImageRetrievalRepository(session, workspace_id),
                 embedding_model=model,
                 embedding_version=version,
                 dimensions=384,
@@ -116,7 +121,7 @@ def test_postgresql_pgvector_cosine_query_ranks_known_vectors() -> None:
         )
     finally:
         with Session(engine) as session:
-            session.execute(delete(Post).where(Post.id == post_id))
-            session.execute(delete(ImageAsset).where(ImageAsset.id.in_(image_ids)))
+            if workspace_id is not None:
+                session.execute(delete(Workspace).where(Workspace.id == workspace_id))
             session.commit()
         engine.dispose()

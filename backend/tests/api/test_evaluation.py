@@ -25,7 +25,8 @@ def test_evaluation_api_runs_persists_and_reads_full_report(
     assert body["correct_top1"] == 3
     assert body["correct_no_confident_match"] == 7
     assert body["unsafe_acceptance_count"] == 0
-    assert body["top1_precision"] == 1.0
+    assert body["top1_precision"] == 0.3
+    assert body["issued_recommendation_precision"] == 1.0
     assert len(body["examples"]) == 10
 
     latest = image_api.client.get("/evaluation/latest")

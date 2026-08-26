@@ -7,7 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.embedding import ImageEmbedding, PostEmbedding
+from app.models.image_asset import ImageAsset
 from app.models.image_metadata import ImageMetadata
+from app.models.post import Post
 
 
 @dataclass(frozen=True)
@@ -27,8 +29,15 @@ class RankedImageRecord:
 
 
 class ImageRetrievalRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, workspace_id: UUID | None = None) -> None:
         self._session = session
+        self.workspace_id = workspace_id
+
+    def _post_scope(self):
+        return () if self.workspace_id is None else (Post.workspace_id == self.workspace_id,)
+
+    def _image_scope(self):
+        return () if self.workspace_id is None else (ImageAsset.workspace_id == self.workspace_id,)
 
     def get_post_embedding(
         self,
@@ -39,27 +48,34 @@ class ImageRetrievalRepository:
         dimensions: int,
     ) -> PostEmbedding | None:
         return self._session.scalar(
-            select(PostEmbedding).where(
+            select(PostEmbedding).join(Post).where(
                 PostEmbedding.post_id == post_id,
                 PostEmbedding.embedding_model == model,
                 PostEmbedding.embedding_version == version,
                 PostEmbedding.dimensions == dimensions,
+                *self._post_scope(),
             )
         )
 
     def count_post_embeddings(self, post_id: UUID) -> int:
         return int(
             self._session.scalar(
-                select(func.count()).select_from(PostEmbedding).where(
-                    PostEmbedding.post_id == post_id
-                )
+                select(func.count())
+                .select_from(PostEmbedding)
+                .join(Post)
+                .where(PostEmbedding.post_id == post_id, *self._post_scope())
             )
             or 0
         )
 
     def count_image_embeddings(self) -> int:
         return int(
-            self._session.scalar(select(func.count()).select_from(ImageEmbedding))
+            self._session.scalar(
+                select(func.count())
+                .select_from(ImageEmbedding)
+                .join(ImageAsset)
+                .where(*self._image_scope())
+            )
             or 0
         )
 
@@ -72,7 +88,7 @@ class ImageRetrievalRepository:
                     ImageEmbedding.embedding_model == model,
                     ImageEmbedding.embedding_version == version,
                     ImageEmbedding.dimensions == dimensions,
-                )
+                ).join(ImageAsset).where(*self._image_scope())
             )
             or 0
         )
@@ -117,11 +133,13 @@ class ImageRetrievalRepository:
         statement = (
             select(ImageEmbedding.image_id, distance, ImageMetadata)
             .join(ImageMetadata, ImageMetadata.image_id == ImageEmbedding.image_id)
+            .join(ImageAsset, ImageAsset.id == ImageEmbedding.image_id)
             .where(
                 ImageEmbedding.embedding_model == model,
                 ImageEmbedding.embedding_version == version,
                 ImageEmbedding.dimensions == dimensions,
                 distance.is_not(None),
+                *self._image_scope(),
             )
             .order_by(distance.asc(), ImageEmbedding.image_id.asc())
             .limit(top_k)
@@ -144,10 +162,12 @@ class ImageRetrievalRepository:
         rows = self._session.execute(
             select(ImageEmbedding, ImageMetadata)
             .join(ImageMetadata, ImageMetadata.image_id == ImageEmbedding.image_id)
+            .join(ImageAsset, ImageAsset.id == ImageEmbedding.image_id)
             .where(
                 ImageEmbedding.embedding_model == model,
                 ImageEmbedding.embedding_version == version,
                 ImageEmbedding.dimensions == dimensions,
+                *self._image_scope(),
             )
         )
         ranked: list[RankedImageRecord] = []

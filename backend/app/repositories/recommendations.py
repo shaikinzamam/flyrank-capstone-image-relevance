@@ -8,11 +8,13 @@ from app.models.recommendation import (
     RecommendationReview,
     RecommendationRun,
 )
+from app.models.post import Post
 
 
 class RecommendationRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, workspace_id: UUID | None = None) -> None:
         self._session = session
+        self.workspace_id = workspace_id
 
     def persist(
         self, run: RecommendationRun, decisions: list[Recommendation]
@@ -26,8 +28,12 @@ class RecommendationRepository:
     def get(self, recommendation_id: UUID) -> Recommendation | None:
         return self._session.scalar(
             select(Recommendation)
+            .join(Post, Post.id == Recommendation.post_id)
             .options(selectinload(Recommendation.reviews))
-            .where(Recommendation.id == recommendation_id)
+            .where(
+                Recommendation.id == recommendation_id,
+                *(() if self.workspace_id is None else (Post.workspace_id == self.workspace_id,)),
+            )
         )
 
     def add_review(

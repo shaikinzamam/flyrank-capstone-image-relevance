@@ -73,7 +73,8 @@ def test_baseline_metrics_and_precision_formula_are_exact(
     assert baseline.incorrect_refusals == 0
     assert baseline.unsafe_acceptance_count == 0
     assert baseline.correct_safe_rejections == 10
-    assert baseline.top1_precision == 3 / (3 + 0)
+    assert baseline.top1_precision == 3 / 10
+    assert baseline.issued_recommendation_precision == 3 / (3 + 0)
     assert baseline.safe_acceptance_precision == 1.0
     assert baseline.unsafe_rejection_recall == 1.0
     assert baseline.config_version == "phase8-v1"
@@ -128,6 +129,20 @@ def test_incorrect_refusal_and_correct_no_match_are_counted(
 
     assert report.correct_no_confident_match == 1
     assert report.incorrect_refusals == 1
+    assert report.top1_precision == 0 / 2
+
+
+def test_acceptance_probes_3_and_4_reject_forced_wolf_and_return_no_match(
+    baseline: EvaluationReport,
+) -> None:
+    forced = next(
+        item for item in baseline.examples if item.example_id == "eval_forced_wolf_on_fox"
+    )
+
+    assert forced.actual_result == "NO_CONFIDENT_MATCH"
+    assert forced.selected_image_id is None
+    assert forced.candidates[0].fixture_image_id == "forced_wolf"
+    assert forced.candidates[0].decision.value == "SUBJECT_MISMATCH"
 
 
 def test_alias_and_fox_wolf_examples_capture_actual_guard_evidence(

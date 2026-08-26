@@ -6,9 +6,10 @@
 
 This FlyRank Backend AI Engineering capstone will build a trustworthy service that understands a small image library, generates structured metadata, and recommends images for articles only when the available evidence is strong enough.
 
-The project is currently at **Phase 12 final hardening**. The complete backend and
-responsive frontend have a reproducible synthetic demo seed, verified evaluator
-commands, explicit security/configuration boundaries, and a final test matrix.
+The project is currently at **Phase 12.5 corrective hardening**; Phase 13 remains
+paused. The backend and responsive frontend now include persisted bearer-key
+authorization, workspace isolation, asynchronous vision/embedding jobs, a pinned
+50-image licensed corpus, and corrected official evaluation metrics.
 
 ## Problem
 
@@ -59,6 +60,8 @@ Three.js and React Three Fiber are intentionally excluded.
 - Phase 10 recommendation inspection and guarded human review: implemented
 - Phase 11 responsive Next.js product interface: implemented
 - Phase 12 hardening and deterministic demo readiness: implemented
+- Phase 12.5 authorization, tenant isolation, async embeddings, corpus, probes,
+  and metric correction: implemented and awaiting approval
 - Image upload, listing, detail, hashing, duplicate rejection, and local persistence: verified
 - FastAPI `/health` and database-backed `/ready`: verified
 - PostgreSQL, pgvector, SQLAlchemy, and Alembic infrastructure: verified
@@ -74,8 +77,8 @@ Three.js and React Three Fiber are intentionally excluded.
   `vector(384)` persistence: implemented
 - Semantic candidate ranking: implemented
 - Mismatch guard and final recommendations: implemented
-- Licensed photographic corpus collection: not started; the demo uses clearly
-  labeled, programmatically generated synthetic images with no licensing claim
+- Reproducible licensed corpus: 50 pinned Wikimedia Commons images with source,
+  creator, license, attribution URL, download URL, and SHA-256 manifest evidence
 - Evaluation execution: implemented with a versioned deterministic baseline
 - Frontend landing, images, matching, review, and evaluation routes: implemented
 
@@ -95,7 +98,13 @@ From a clean machine:
 git clone <repository-url>
 cd "Image Relevance & Auto-Tagging"
 Copy-Item .env.example .env
-# Replace POSTGRES_PASSWORD before any non-local deployment.
+# Generate one high-entropy local demo key and place the same value in
+# DEMO_API_KEY and NEXT_PUBLIC_API_KEY in the ignored .env file.
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+'frk_' + [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+# Also replace POSTGRES_PASSWORD before any non-local deployment.
 docker compose up --build -d
 docker compose ps
 docker compose exec -T api alembic current
@@ -121,21 +130,33 @@ Expected responses are `{"status":"ok"}` and
 ### Environment policy
 
 Every application variable is listed in [.env.example](.env.example). Compose
-defaults to the credential-free deterministic vision fixture. Gemini is opt-in:
+defaults to deterministic providers grounded in the pinned licensed corpus.
+Gemini and the pinned local sentence-transformer remain opt-in:
 set `VISION_PROVIDER=gemini`, `GEMINI_API_KEY`, a conservative per-call estimate,
 and a total budget. `NEXT_PUBLIC_API_BASE_URL` is intentionally public and is
 baked into the browser bundle at frontend build time; database credentials and
 Gemini keys are server-only. `CORS_ALLOWED_ORIGINS` is a comma-separated explicit
 HTTP(S) origin list; wildcard origins are rejected and credentials are disabled.
 
+All application routes except `GET /health` and `GET /ready` require
+`Authorization: Bearer <api-key>`. Only a SHA-256 digest of the random 256-bit
+bearer secret is persisted; comparison is constant-time. The browser demo key is
+intentionally local and visible to its browser workspace, not a production
+secret-distribution pattern. Cross-workspace IDs return `404`.
+
 For production, replace the development database password, restrict published
-ports/origins, terminate TLS at a trusted proxy, use durable object storage, and
-add authentication/workspace authorization. Those deployment capabilities are
-not claimed by this capstone.
+ports/origins, terminate TLS at a trusted proxy, rotate per-client API keys, and
+use durable object storage.
 
 Open `http://localhost:3000` for the frontend. Browser API calls use
 `NEXT_PUBLIC_API_BASE_URL` (default `http://localhost:8000`); allowed browser
 origins are controlled by backend `CORS_ALLOWED_ORIGINS`.
+
+PowerShell API examples below assume:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:DEMO_API_KEY" }
+```
 
 For standalone frontend development:
 
@@ -167,16 +188,16 @@ Three.js and React Three Fiber remain excluded.
 Register an image with multipart form data and inspect registered assets with:
 
 ```powershell
-curl.exe -F "file=@C:\path\to\image.png;type=image/png" http://localhost:8000/images
-Invoke-RestMethod http://localhost:8000/images
-Invoke-RestMethod http://localhost:8000/images/{image_id}
+curl.exe -H "Authorization: Bearer $env:DEMO_API_KEY" -F "file=@C:\path\to\image.png;type=image/png" http://localhost:8000/images
+Invoke-RestMethod -Headers $headers http://localhost:8000/images
+Invoke-RestMethod -Headers $headers http://localhost:8000/images/{image_id}
 ```
 
 Analyze one uploaded image synchronously with:
 
 ```powershell
-Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/analyze
-Invoke-RestMethod -Method Post 'http://localhost:8000/images/{image_id}/analyze?reprocess=true'
+Invoke-RestMethod -Method Post -Headers $headers http://localhost:8000/images/{image_id}/analyze
+Invoke-RestMethod -Method Post -Headers $headers 'http://localhost:8000/images/{image_id}/analyze?reprocess=true'
 ```
 
 The ordinary analyze call returns the existing metadata (`reused: true`) when one
@@ -194,30 +215,34 @@ $body = @{
   image_ids = @("IMAGE_UUID_1", "IMAGE_UUID_2")
   idempotency_key = "demo-batch-001"
 } | ConvertTo-Json
-$job = Invoke-RestMethod -Method Post -ContentType application/json `
+$job = Invoke-RestMethod -Method Post -Headers $headers -ContentType application/json `
   -Body $body http://localhost:8000/images/process
-Invoke-RestMethod http://localhost:8000/jobs/$($job.id)
-Invoke-RestMethod http://localhost:8000/jobs/$($job.id)/items
+Invoke-RestMethod -Headers $headers http://localhost:8000/jobs/$($job.id)
+Invoke-RestMethod -Headers $headers http://localhost:8000/jobs/$($job.id)/items
 ```
 
 The Compose stack runs PostgreSQL, API, and worker processes. Its default
-`VISION_PROVIDER=fake` is deliberate so deterministic worker verification never
-uses credentials or incurs cost. Set `VISION_PROVIDER=gemini`, a Gemini key, an
-explicit conservative per-call estimate, and a total demo budget to use Gemini.
+`VISION_PROVIDER=corpus_fixture` is restricted to the pinned acceptance corpus,
+is deterministic, and incurs no external model cost. Set `VISION_PROVIDER=gemini`,
+a Gemini key, an explicit conservative per-call estimate, and a total demo budget
+to use Gemini.
 
-Create and embed a post, or explicitly embed schema-valid image metadata:
+Create a post and queue its embedding; image embeddings are produced by the
+ordinary `/images/process` batch job:
 
 ```powershell
-$post = Invoke-RestMethod -Method Post -ContentType application/json `
+$post = Invoke-RestMethod -Method Post -Headers $headers -ContentType application/json `
   -Body '{"title":"Winter foxes","body":"A red fox in snow.","expected_subject":"red fox","expected_category":"animal","required_tags":["snow"]}' `
   http://localhost:8000/posts
-Invoke-RestMethod -Method Post http://localhost:8000/posts/$($post.id)/embedding
-Invoke-RestMethod -Method Post http://localhost:8000/images/{image_id}/embedding
-Invoke-RestMethod 'http://localhost:8000/posts/{post_id}/image-candidates?top_k=5'
-Invoke-RestMethod -Method Post 'http://localhost:8000/posts/{post_id}/recommendations?top_k=5'
+$embeddingBody = @{ idempotency_key = "post-embedding-001" } | ConvertTo-Json
+$postJob = Invoke-RestMethod -Method Post -Headers $headers -ContentType application/json `
+  -Body $embeddingBody http://localhost:8000/posts/$($post.id)/embedding
+Invoke-RestMethod -Headers $headers http://localhost:8000/jobs/$($postJob.id)
+Invoke-RestMethod -Headers $headers 'http://localhost:8000/posts/{post_id}/image-candidates?top_k=5'
+Invoke-RestMethod -Method Post -Headers $headers 'http://localhost:8000/posts/{post_id}/recommendations?top_k=5'
 ```
 
-Both resource types use `sentence-transformers/all-MiniLM-L6-v2` pinned to model
+Production/local-model mode uses `sentence-transformers/all-MiniLM-L6-v2` pinned to model
 revision `c9745ed1d9f207416be6d2e6f8de32d1f16199bf`, 384 dimensions, and L2
 normalization. The local
 provider is loaded lazily. Normal tests override it with a deterministic fake and
@@ -229,8 +254,9 @@ a separately constrained row. Each actual embedding call is logged with provider
 
 Low-confidence image metadata remains `flagged` and is eligible for embedding so
 it can support later observability experiments. Embedding does not make it
-trusted; the mismatch guard rejects it. Phase 6 uses explicit embedding
-endpoints rather than changing the approved Phase 5 vision-job semantics.
+trusted; the mismatch guard rejects it. The production path generates image and
+post embeddings asynchronously. Deprecated `/embedding/debug-sync` endpoints
+exist only for development diagnostics.
 
 `GET /posts/{post_id}/image-candidates?top_k=5` performs an exact pgvector cosine
 query for the configured model/revision/dimension. Pgvector's cosine distance is
@@ -274,9 +300,8 @@ remain inspectable. Guard-rejected candidates return `409` for either human acti
 so review cannot turn `SUBJECT_MISMATCH` or a `NO_CONFIDENT_MATCH` run into a safe
 recommendation. Review never changes the AI evidence and makes no provider call.
 
-Authentication is intentionally deferred. `reviewer_id` is nullable and currently
-returned as `null`; a future authenticated boundary will supply it server-side,
-not accept a claimed reviewer identity from the request body.
+`reviewer_id` remains nullable because API keys identify workspaces rather than
+individual people. It is never accepted as a claimed request-body identity.
 
 Uploads are streamed with a configured byte limit, hashed with SHA-256, decoded with Pillow, restricted to JPEG/PNG/WEBP, and stored under generated keys in a controlled local directory. A byte-identical upload returns `409 Conflict`; no second database row or file is created. `storage_key` is an opaque relative identifier, not a host filesystem path.
 
@@ -314,14 +339,13 @@ only the final structured report enters the normal application database.
 - Correct `NO_CONFIDENT_MATCH` outcomes: 7
 - Incorrect refusals: 0
 - Unsafe acceptances: 0
-- **Top-1 precision: `1.0000`**
+- **Official top-1 precision: `0.3000`** (`3 / 10` evaluated posts)
+- **Issued-recommendation precision: `1.0000`** (`3 / 3` issued suggestions)
 
-Top-1 precision is `correct acceptable top-1 recommendations / all issued top-1
-recommendations`, or `3 / (3 + 0)`. Refusals are excluded from that denominator
-and reported separately, so precision is not being substituted with overall
-accuracy. The official PDF's mathematical definition was not available in the
-project materials; this standard interpretation is therefore explicit rather
-than implied.
+The official metric includes every evaluated post in its denominator; the issued
+precision answers the separate question of how often an actually issued
+recommendation was correct. Refusals therefore reduce official top-1 but do not
+reduce issued-recommendation precision.
 
 This perfect result describes a small deterministic acceptance dataset, not
 general-world model quality. Thresholds were not changed after seeing the result.
@@ -334,13 +358,14 @@ Run this exact deterministic path after the stack is healthy:
 docker compose exec -T api python -m scripts.seed
 ```
 
-The command replaces only records whose names use the reserved Phase 12 demo
-prefix. It generates three visibly labeled synthetic PNGs, passes them through
-the same upload validation and metadata/embedding services, and prints a JSON
-manifest. The manifest proves raw rank `gray wolf 0.93`, `red fox 0.90`, and
-`domestic dog 0.82`; the guard rejects wolf with `SUBJECT_MISMATCH`, accepts fox,
-persists a human review, then temporarily excludes the fox embedding to persist a
-wolf/dog-only `NO_CONFIDENT_MATCH`. It also runs and persists `evaluation-v1`.
+The command validates or downloads the 50 SHA-pinned licensed images, uploads all
+of them through normal ingestion, submits one background batch, waits for the
+durable worker to create vision metadata and image embeddings, and queues the post
+embedding. Its JSON evidence proves one deterministic low-confidence flag and
+all 50 terminal successes. The separate known-vector Probe 2 ranks `red fox 1.00`,
+`gray wolf 0.80`, and `domestic dog 0.60`; Probe 3 isolates and rejects the wolf
+with `SUBJECT_MISMATCH`; Probe 4 persists `NO_CONFIDENT_MATCH`. Deterministic
+acceptance providers are clearly distinct from live Gemini/local-model behavior.
 
 UI walkthrough, using IDs printed by the seed command:
 
@@ -356,7 +381,8 @@ UI walkthrough, using IDs printed by the seed command:
    candidate has no approval control. The manifest's `no_match_reason` is
    `NO_CONFIDENT_MATCH` for the wolf/dog-only run.
 5. Open `http://localhost:3000/evaluation`; verify 10 examples, 3 correct top-1,
-   7 correct refusals, 0 unsafe acceptances, and precision `1.0000`.
+   7 correct refusals, 0 unsafe acceptances, official top-1 `0.3000`, and issued
+   precision `1.0000`.
 
 To demonstrate the durable worker separately, upload a valid local JPEG/PNG/WEBP,
 submit its returned UUID to `POST /images/process`, and poll the job commands in
@@ -371,7 +397,8 @@ vision response and incurs no external cost.
 - The baseline thresholds have not been tuned and ten deterministic fixtures are
   too small to establish general-world performance.
 - Local filesystem image storage is suitable for the capstone but not a distributed production deployment.
-- Authentication and workspace isolation are not implemented yet; the image table is intentionally unscoped until that boundary is designed.
+- API keys are workspace-level rather than per-human identities; OAuth, invitations,
+  password recovery, and complex RBAC remain intentionally out of scope.
 - The Phase 4 taxonomy is intentionally limited to red fox, gray wolf, domestic dog, brown bear, and white-tailed deer; out-of-taxonomy classifications are rejected.
 - The default `0.70` low-confidence threshold is configurable and provisional until evaluation tunes it.
 - The budget guard is a total-demo cap. It atomically reserves the configured conservative estimated cost before every provider attempt; when budgeting is enabled, a missing estimate blocks the call.

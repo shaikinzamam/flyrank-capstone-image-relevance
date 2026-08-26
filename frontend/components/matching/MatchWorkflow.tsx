@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createPost, embedPost, retrieveCandidates, createRecommendation } from "@/lib/api/posts";
+import { createPost, embedPost, waitForJob, retrieveCandidates, createRecommendation } from "@/lib/api/posts";
 import type { ImageCandidatesResponse, PostInput, RecommendationRun } from "@/types/api";
 import { CandidateList } from "./CandidateList";
 import { MismatchGuardPanel } from "./MismatchGuardPanel";
@@ -22,7 +22,8 @@ export function MatchWorkflow() {
     try {
       const input = { ...form, expected_subject: form.expected_subject || null, expected_category: form.expected_category || null, required_tags: tagText.split(",").map((tag) => tag.trim()).filter(Boolean) };
       setStage("Creating article"); const post = await createPost(input);
-      setStage("Generating semantic embedding"); await embedPost(post.id);
+      setStage("Queueing semantic embedding"); const job = await embedPost(post.id);
+      setStage("Generating semantic embedding"); await waitForJob(job.id);
       setStage("Retrieving semantic candidates"); setRaw(await retrieveCandidates(post.id));
       setStage("Applying deterministic mismatch guard"); setGuarded(await createRecommendation(post.id));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Matching could not be completed."); }

@@ -29,6 +29,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://flyrank:flyrank@localhost:5432/flyrank",
         validation_alias="DATABASE_URL",
     )
+    demo_api_key: str | None = Field(default=None, validation_alias="DEMO_API_KEY")
     image_storage_root: Path = Field(
         default=Path("uploads"),
         validation_alias="IMAGE_STORAGE_ROOT",
@@ -109,10 +110,15 @@ class Settings(BaseSettings):
         default=Path("../data/evaluation.jsonl"),
         validation_alias="EVALUATION_DATASET_PATH",
     )
+    corpus_manifest_path: Path = Field(
+        default=Path("../data/corpus-manifest.json"),
+        validation_alias="CORPUS_MANIFEST_PATH",
+    )
 
     @field_validator(
         "vision_budget_usd",
         "vision_estimated_cost_per_call_usd",
+        "demo_api_key",
         mode="before",
     )
     @classmethod

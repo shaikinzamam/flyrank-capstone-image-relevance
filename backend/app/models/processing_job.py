@@ -57,13 +57,19 @@ class ProcessingJob(Base):
             name="ck_processing_jobs_status",
         ),
         Index("ix_processing_jobs_status_created_at", "status", "created_at"),
+        UniqueConstraint(
+            "workspace_id", "idempotency_key", name="uq_jobs_workspace_idempotency"
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     job_type: Mapped[str] = mapped_column(
-        String(40), default="image_analysis", server_default="image_analysis"
+        String(40), default="image_processing", server_default="image_processing"
     )
     status: Mapped[str] = mapped_column(
         String(30), default=JobStatus.PENDING.value, server_default="pending"
@@ -73,7 +79,7 @@ class ProcessingJob(Base):
         Integer, default=0, server_default="0"
     )
     failed_items: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    idempotency_key: Mapped[str] = mapped_column(String(128), unique=True)
+    idempotency_key: Mapped[str] = mapped_column(String(128))
     failure_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -103,6 +109,12 @@ class ProcessingJobItem(Base):
             name="ck_processing_job_items_status",
         ),
         UniqueConstraint("job_id", "image_id", name="uq_job_items_job_image"),
+        UniqueConstraint("job_id", "post_id", name="uq_job_items_job_post"),
+        CheckConstraint(
+            "(image_id IS NOT NULL AND post_id IS NULL) OR "
+            "(image_id IS NULL AND post_id IS NOT NULL)",
+            name="ck_job_items_one_resource",
+        ),
         Index(
             "ix_job_items_claim",
             "status",
@@ -120,10 +132,15 @@ class ProcessingJobItem(Base):
         ForeignKey("processing_jobs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    image_id: Mapped[UUID] = mapped_column(
+    image_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("image_assets.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
+    )
+    post_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("posts.id", ondelete="RESTRICT"),
+        nullable=True,
     )
     status: Mapped[str] = mapped_column(
         String(30), default=JobItemStatus.PENDING.value, server_default="pending"

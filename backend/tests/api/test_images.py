@@ -212,7 +212,7 @@ def test_image_details_compose_metadata_and_embedding_state(
     ).json()
     pending = image_api.client.get(f"/images/{created['id']}/details")
     analyzed = image_api.client.post(f"/images/{created['id']}/analyze")
-    embedded = image_api.client.post(f"/images/{created['id']}/embedding")
+    embedded = image_api.client.post(f"/images/{created['id']}/embedding/debug-sync")
     details = image_api.client.get(f"/images/{created['id']}/details")
 
     assert pending.status_code == 200

@@ -6,11 +6,17 @@ import time
 from typing import Any
 from uuid import uuid4
 
-from app.api.dependencies import get_image_storage, get_vision_provider
+from app.api.dependencies import (
+    get_embedding_provider,
+    get_image_storage,
+    get_vision_provider,
+)
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.repositories.image_assets import ImageAssetRepository
 from app.repositories.image_metadata import ImageMetadataRepository
+from app.repositories.embeddings import EmbeddingRepository
+from app.repositories.posts import PostRepository
 from app.repositories.processing_jobs import (
     ClaimedJobItem,
     ProcessingJobRepository,
@@ -26,6 +32,15 @@ from app.services.image_analysis import (
     VisionProviderTimeoutError,
 )
 from app.services.image_assets import ImageNotFoundError
+from app.services.embeddings import (
+    EmbeddingConfigurationError,
+    EmbeddingEligibilityError,
+    EmbeddingPersistenceError,
+    EmbeddingProviderFailureError,
+    EmbeddingService,
+    EmbeddingValidationError,
+)
+from app.services.posts import PostNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +53,7 @@ class ImageProcessingWorker:
         session_factory: Any = SessionLocal,
         settings: Any = None,
         provider: Any = None,
+        embedding_provider: Any = None,
         storage: Any = None,
     ) -> None:
         self._settings = settings or get_settings()
@@ -46,6 +62,7 @@ class ImageProcessingWorker:
         )
         self._session_factory = session_factory
         self._provider = provider or get_vision_provider()
+        self._embedding_provider = embedding_provider or get_embedding_provider()
         self._storage = storage or get_image_storage()
 
     def process_one(self) -> bool:
@@ -59,8 +76,8 @@ class ImageProcessingWorker:
                 return False
 
             analysis = ImageAnalysisService(
-                ImageAssetRepository(session),
-                ImageMetadataRepository(session),
+                ImageAssetRepository(session, claimed.workspace_id),
+                ImageMetadataRepository(session, claimed.workspace_id),
                 self._storage,
                 self._provider,
                 low_confidence_threshold=(
@@ -68,14 +85,46 @@ class ImageProcessingWorker:
                 ),
                 vision_budget_usd=self._settings.vision_budget_usd,
             )
+            embeddings = EmbeddingService(
+                EmbeddingRepository(session, claimed.workspace_id),
+                ImageAssetRepository(session, claimed.workspace_id),
+                ImageMetadataRepository(session, claimed.workspace_id),
+                PostRepository(session, claimed.workspace_id),
+                self._embedding_provider,
+            )
             try:
-                analysis.analyze(
-                    claimed.image_id,
-                    reprocess=True,
-                    retry_count=claimed.attempt_count - 1,
-                    allow_processing=True,
-                )
-            except (VisionProviderTimeoutError, VisionProviderFailureError) as exc:
+                if claimed.job_type == "image_processing":
+                    if claimed.image_id is None:
+                        raise EmbeddingEligibilityError(
+                            "Image-processing job item has no image"
+                        )
+                    metadata = ImageMetadataRepository(
+                        session, claimed.workspace_id
+                    ).get_by_image_id(claimed.image_id)
+                    if metadata is None:
+                        analysis.analyze(
+                            claimed.image_id,
+                            reprocess=True,
+                            retry_count=claimed.attempt_count - 1,
+                            allow_processing=True,
+                        )
+                    embeddings.embed_image(claimed.image_id)
+                elif claimed.job_type == "post_embedding":
+                    if claimed.post_id is None:
+                        raise EmbeddingEligibilityError(
+                            "Post-embedding job item has no post"
+                        )
+                    embeddings.embed_post(claimed.post_id)
+                else:
+                    raise EmbeddingEligibilityError(
+                        f"Unsupported processing job type: {claimed.job_type}"
+                    )
+            except (
+                VisionProviderTimeoutError,
+                VisionProviderFailureError,
+                EmbeddingProviderFailureError,
+                EmbeddingPersistenceError,
+            ) as exc:
                 jobs.mark_transient_failure(
                     claimed,
                     error_code=self._error_code(exc),
@@ -89,6 +138,10 @@ class ImageProcessingWorker:
                 MetadataValidationError,
                 VisionBudgetExceededError,
                 VisionProviderConfigurationError,
+                EmbeddingConfigurationError,
+                EmbeddingEligibilityError,
+                EmbeddingValidationError,
+                PostNotFoundError,
             ) as exc:
                 jobs.mark_permanent_failure(
                     claimed,
@@ -130,6 +183,12 @@ class ImageProcessingWorker:
             MetadataValidationError: "schema_validation_failed",
             ImageNotFoundError: "image_not_found",
             ImageStateError: "invalid_image_state",
+            EmbeddingProviderFailureError: "embedding_provider_failure",
+            EmbeddingPersistenceError: "embedding_persistence_failure",
+            EmbeddingConfigurationError: "embedding_configuration",
+            EmbeddingEligibilityError: "embedding_ineligible",
+            EmbeddingValidationError: "embedding_validation_failed",
+            PostNotFoundError: "post_not_found",
         }
         return names.get(type(exc), "processing_failure")
 

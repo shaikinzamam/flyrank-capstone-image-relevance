@@ -17,6 +17,7 @@ from app.models.recommendation import (
     RecommendationRun,
     RecommendationRunStatus,
 )
+from app.models.workspace import ApiCredential, Workspace
 
 __all__ = [
     "AiCallLog",
@@ -38,4 +39,6 @@ __all__ = [
     "RecommendationReview",
     "RecommendationRun",
     "RecommendationRunStatus",
+    "ApiCredential",
+    "Workspace",
 ]

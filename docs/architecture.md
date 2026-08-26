@@ -104,11 +104,12 @@ Malformed output, schema violations, missing images/files, provider
 misconfiguration, and budget denial are permanent item failures. Job counters are
 recomputed under a job-row lock after each terminal item transition.
 
-Phase 6 deliberately does not append embedding work to this job. The narrow
-`POST /images/{id}/embedding` and `POST /posts/{id}/embedding` operations keep
-vision-job completion semantics stable and make embedding failures independently
-visible. A later phase may introduce a separately typed durable embedding job if
-the corpus workflow requires it.
+Phase 12.5 extends this same queue with `image_processing` and `post_embedding`
+job types. Image items run vision, validate/persist metadata, then generate and
+persist the image embedding before terminal success. An embedding-only retry
+reuses valid metadata instead of calling vision again. Post embedding creation
+returns `202` and is claimed by the same worker. Provider/persistence outages are
+transient; invalid vectors, configuration, and eligibility failures are permanent.
 
 ### Providers
 
@@ -125,7 +126,7 @@ the corpus workflow requires it.
 ```text
 upload -> validate bytes/MIME/size -> store asset -> enqueue durable item -> 202
 worker -> Gemini -> Pydantic validation -> confidence policy -> metadata
-explicit embedding operation -> semantic representation -> local embedding
+       -> semantic representation -> embedding provider
   -> pgvector + per-call log OR visible failure
 ```
 
@@ -160,9 +161,12 @@ latest review is projected as `pending`, `approved`, or `rejected`. Review write
 never invoke providers or create AI-call logs, and both human actions require the
 persisted guard decision to be `ACCEPTED`.
 
-There is no authentication system yet. The nullable `reviewer_id` column is the
-ownership seam where server-side authenticated identity will attach later; public
-request schemas do not allow clients to assert it.
+Bearer authentication resolves an active persisted API-key digest to a workspace
+before any tenant route runs. Repositories scope images, posts, jobs, candidates,
+recommendations/reviews, call logs, and evaluations by that workspace; child rows
+derive ownership from their parent foreign key. Foreign IDs return `404`. Health
+and readiness deliberately bypass this dependency. `reviewer_id` remains nullable
+because the minimal credential identifies a workspace, not an individual person.
 
 ### Labeled evaluation
 
@@ -200,11 +204,13 @@ no accepted candidates
 
 Docker Compose starts PostgreSQL, FastAPI, the image-processing worker, and the
 standalone Next.js production server. The deterministic Compose default uses the
-fake vision provider; Gemini remains explicit configuration. Redis, Celery,
+pinned licensed-corpus fixture providers; Gemini and the pinned local embedding
+model remain explicit configuration. Redis, Celery,
 Three.js, and React Three Fiber are not planned.
 
-The Phase 12 evaluator seed adds no runtime service. It executes inside the API
-container, follows the existing service/repository boundaries, writes generated
-demo images to the controlled upload volume, and persists known-vector evidence
-to PostgreSQL. The frontend remains a presentation client; FastAPI remains the
-authority for retrieval, guard decisions, and human-review permission.
+The Phase 12.5 seed adds no runtime service. It validates/downloads the 50-image
+SHA-pinned Wikimedia corpus, uploads it through normal ingestion, enqueues the
+actual batch/post work, and waits on the existing worker. Separate deterministic
+vectors persist the official ranking and mismatch/refusal probe evidence. The
+frontend remains a presentation client; FastAPI remains the authority for
+workspace access, retrieval, guard decisions, and human-review permission.

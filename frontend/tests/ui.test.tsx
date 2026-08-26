@@ -77,10 +77,12 @@ describe("Phase 11 interface", () => {
   });
 
   it("renders evaluation metrics from the supplied API report", () => {
-    const report = { total_examples: 10, correct_top1: 3, correct_no_confident_match: 7, unsafe_acceptance_count: 0, top1_precision: .875, unsafe_rejection_recall: .9, dataset_version: "evaluation-v1", config_version: "phase8-v1", examples: [] } as unknown as EvaluationRun;
+    const report = { total_examples: 10, correct_top1: 3, correct_no_confident_match: 7, unsafe_acceptance_count: 0, top1_precision: .3, issued_recommendation_precision: .875, unsafe_rejection_recall: .9, dataset_version: "evaluation-v1", config_version: "phase8-v1", examples: [] } as unknown as EvaluationRun;
     render(<EvaluationDashboardView report={report} />);
-    const precision = screen.getByText("Top-1 precision").parentElement;
-    expect(within(precision!).getByText("0.8750")).toBeInTheDocument();
+    const precision = screen.getByText("Official top-1 precision").parentElement;
+    expect(within(precision!).getByText("0.3000")).toBeInTheDocument();
+    const issued = screen.getByText("Issued-recommendation precision").parentElement;
+    expect(within(issued!).getByText("0.8750")).toBeInTheDocument();
     expect(screen.getByText(/bounded deterministic evaluation-v1/)).toBeInTheDocument();
   });
 
@@ -105,7 +107,7 @@ describe("Phase 11 interface", () => {
     rerender(<ReviewPanel recommendation={detail} history={[]} onReviewed={vi.fn()} />);
     expect((await axe.run(container, options)).violations).toEqual([]);
 
-    const report = { total_examples: 10, correct_top1: 3, correct_no_confident_match: 7, unsafe_acceptance_count: 0, top1_precision: 1, unsafe_rejection_recall: 1, dataset_version: "evaluation-v1", config_version: "phase8-v1", examples: [] } as unknown as EvaluationRun;
+    const report = { total_examples: 10, correct_top1: 3, correct_no_confident_match: 7, unsafe_acceptance_count: 0, top1_precision: .3, issued_recommendation_precision: 1, unsafe_rejection_recall: 1, dataset_version: "evaluation-v1", config_version: "phase8-v1", examples: [] } as unknown as EvaluationRun;
     rerender(<EvaluationDashboardView report={report} />);
     expect((await axe.run(container, options)).violations).toEqual([]);
   });

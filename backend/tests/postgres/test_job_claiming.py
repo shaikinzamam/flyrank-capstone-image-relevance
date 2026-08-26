@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.image_asset import ImageAsset
 from app.models.processing_job import ProcessingJob, ProcessingJobItem
+from app.models.workspace import Workspace
 from app.repositories.processing_jobs import ProcessingJobRepository
+from tests.conftest import create_postgres_workspace
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_POSTGRES_CONCURRENCY") != "1",
@@ -28,8 +30,11 @@ def test_two_postgres_workers_cannot_claim_the_same_item() -> None:
     )
     unique = uuid4().hex
     asset_id = uuid4()
+    workspace_id = None
     with sessions() as session:
+        workspace_id = create_postgres_workspace(session, "claim-pg")
         asset = ImageAsset(
+            workspace_id=workspace_id,
             id=asset_id,
             filename=f"claim-{unique}.png",
             storage_key=f"test/{unique}.png",
@@ -39,6 +44,7 @@ def test_two_postgres_workers_cannot_claim_the_same_item() -> None:
             processing_status="uploaded",
         )
         job = ProcessingJob(
+            workspace_id=workspace_id,
             total_items=1,
             idempotency_key=f"postgres-claim-{unique}",
             items=[
@@ -85,6 +91,6 @@ def test_two_postgres_workers_cannot_claim_the_same_item() -> None:
     finally:
         with sessions() as session:
             session.execute(delete(ProcessingJob).where(ProcessingJob.id == job_id))
-            session.execute(delete(ImageAsset).where(ImageAsset.id == asset_id))
+            session.execute(delete(Workspace).where(Workspace.id == workspace_id))
             session.commit()
         engine.dispose()

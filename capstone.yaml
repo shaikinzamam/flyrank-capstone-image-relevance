@@ -2,7 +2,12 @@ name: flyrank-capstone-image-relevance
 title: Image Relevance & Auto-Tagging
 subtitle: AI Image Understanding & Content Matching Engine
 phase: final_hardening
-implementation_status: phase_12_complete
+implementation_status: phase_12_5_complete_phase_13_paused
+
+authentication:
+  scheme: bearer_api_key
+  demo_key_env: DEMO_API_KEY
+  public_endpoints: [/health, /ready]
 
 run: "docker compose up --build -d"
 seed: "docker compose exec -T api python -m scripts.seed"

@@ -6,7 +6,9 @@ from PIL import Image
 from sqlalchemy import func, select
 
 from app.core.config import get_settings
+from app.models.embedding import ImageEmbedding, PostEmbedding
 from app.models.image_metadata import AiCallLog, ImageMetadata
+from app.providers.embedding import FakeEmbeddingProvider
 from app.models.image_asset import ImageAsset
 from app.models.processing_job import ProcessingJob, ProcessingJobItem
 from app.providers.fake import FakeVisionProvider
@@ -58,6 +60,7 @@ def worker(
     *,
     budget: float | None = None,
     worker_id: str = "test-worker",
+    embedding_provider: FakeEmbeddingProvider | None = None,
 ) -> ImageProcessingWorker:
     settings = get_settings().model_copy(
         update={
@@ -71,6 +74,7 @@ def worker(
         session_factory=context.session_factory,
         settings=settings,
         provider=provider,
+        embedding_provider=embedding_provider or context.embedding_provider,
         storage=context.storage,
     )
 
@@ -111,6 +115,7 @@ def test_worker_claims_and_successfully_completes_job(
         assert item.status == "succeeded"
         assert item.attempt_count == 1
         assert session.scalar(select(func.count()).select_from(ImageMetadata)) == 1
+        assert session.scalar(select(func.count()).select_from(ImageEmbedding)) == 1
         call = session.scalar(select(AiCallLog))
         assert call is not None
         assert call.status == "succeeded"
@@ -134,6 +139,49 @@ def test_job_completes_after_all_batch_items_succeed(
         assert persisted_job.status == "completed"
         assert persisted_job.processed_items == 2
         assert persisted_job.failed_items == 0
+
+
+def test_acceptance_probe_1_batch_progress_metadata_embeddings_and_low_confidence(
+    image_api: ImageApiContext,
+) -> None:
+    first = upload_image(image_api, "orange")
+    second = upload_image(image_api, "green")
+    job = queue_job(image_api, [first["id"], second["id"]], "acceptance-probe-1")
+    outputs = iter(
+        [
+            VALID_METADATA,
+            {**VALID_METADATA, "caption": "Flagged deterministic fixture", "confidence": 0.55},
+        ]
+    )
+    provider = FakeVisionProvider(VALID_METADATA)
+
+    def analyze(path, mime_type):
+        del path, mime_type
+        provider.call_count += 1
+        return next(outputs)
+
+    provider.analyze = analyze
+    processing_worker = worker(image_api, provider)
+
+    assert processing_worker.process_one() is True
+    progress = image_api.client.get(f"/jobs/{job['id']}").json()
+    assert progress["status"] == "running"
+    assert progress["processed_items"] == 1
+    assert progress["progress"] == 0.5
+
+    assert processing_worker.process_one() is True
+    terminal = image_api.client.get(f"/jobs/{job['id']}").json()
+    assert terminal["status"] == "completed"
+    assert terminal["progress"] == 1.0
+    with image_api.session_factory() as session:
+        assert session.scalar(select(func.count()).select_from(ImageMetadata)) == 2
+        assert session.scalar(select(func.count()).select_from(ImageEmbedding)) == 2
+        assert session.scalar(
+            select(func.count()).select_from(ImageMetadata).where(
+                ImageMetadata.is_low_confidence.is_(True)
+            )
+        ) == 1
+        assert session.scalar(select(func.count()).select_from(AiCallLog)) == 4
 
 
 def test_active_lease_prevents_second_worker_claim(
@@ -245,8 +293,109 @@ def test_transient_failure_retries_then_succeeds(
         assert item.status == "succeeded"
         assert item.attempt_count == 2
         calls = list(session.scalars(select(AiCallLog).order_by(AiCallLog.created_at)))
-        assert [call.status for call in calls] == ["failed", "succeeded"]
-        assert [call.retry_count for call in calls] == [0, 1]
+        assert [call.status for call in calls] == [
+            "failed",
+            "succeeded",
+            "succeeded",
+        ]
+        assert [call.operation for call in calls] == [
+            "vision_analyze",
+            "vision_analyze",
+            "embedding_generate",
+        ]
+        assert [call.retry_count for call in calls[:2]] == [0, 1]
+
+
+def test_embedding_failure_retries_without_repeating_valid_vision_metadata(
+    image_api: ImageApiContext,
+) -> None:
+    image = upload_image(image_api)
+    job = queue_job(image_api, [image["id"]], "embedding-retry")
+    vision = FakeVisionProvider(VALID_METADATA)
+    embedding = FakeEmbeddingProvider(output=RuntimeError("temporary embedding outage"))
+    processing_worker = worker(
+        image_api, vision, embedding_provider=embedding
+    )
+
+    assert processing_worker.process_one() is True
+    assert vision.call_count == 1
+    force_retry_available(image_api, job["id"])
+    embedding.output = [1.0] + [0.0] * 383
+    assert processing_worker.process_one() is True
+
+    with image_api.session_factory() as session:
+        item = session.scalar(
+            select(ProcessingJobItem).where(
+                ProcessingJobItem.job_id == UUID(job["id"])
+            )
+        )
+        calls = list(session.scalars(select(AiCallLog).order_by(AiCallLog.created_at)))
+        assert item is not None and item.status == "succeeded"
+        assert vision.call_count == 1
+        assert [call.operation for call in calls] == [
+            "vision_analyze",
+            "embedding_generate",
+            "embedding_generate",
+        ]
+        assert [call.status for call in calls] == [
+            "succeeded",
+            "failed",
+            "succeeded",
+        ]
+
+
+def test_permanent_embedding_validation_failure_fails_image_item(
+    image_api: ImageApiContext,
+) -> None:
+    image = upload_image(image_api)
+    job = queue_job(image_api, [image["id"]], "embedding-invalid")
+    invalid = FakeEmbeddingProvider(output=[0.1] * 383)
+
+    assert worker(
+        image_api, FakeVisionProvider(VALID_METADATA), embedding_provider=invalid
+    ).process_one() is True
+
+    with image_api.session_factory() as session:
+        item = session.scalar(
+            select(ProcessingJobItem).where(
+                ProcessingJobItem.job_id == UUID(job["id"])
+            )
+        )
+        assert item is not None and item.status == "failed"
+        assert item.last_error_code == "embedding_validation_failed"
+        assert session.scalar(select(func.count()).select_from(ImageEmbedding)) == 0
+
+
+def test_post_embedding_production_path_is_async_and_idempotent(
+    image_api: ImageApiContext,
+) -> None:
+    post = image_api.client.post(
+        "/posts",
+        json={
+            "title": "Async fox post",
+            "body": "A red fox in winter.",
+            "expected_subject": "red fox",
+            "expected_category": "animal",
+            "required_tags": [],
+        },
+    ).json()
+    request = {"idempotency_key": "async-post-embedding"}
+    first = image_api.client.post(f"/posts/{post['id']}/embedding", json=request)
+    second = image_api.client.post(f"/posts/{post['id']}/embedding", json=request)
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["reused"] is True
+    assert worker(image_api, FakeVisionProvider(VALID_METADATA)).process_one() is True
+
+    with image_api.session_factory() as session:
+        job = session.get(ProcessingJob, UUID(first.json()["id"]))
+        assert job is not None and job.status == "completed"
+        assert session.scalar(select(func.count()).select_from(PostEmbedding)) == 1
+        call = session.scalar(
+            select(AiCallLog).where(AiCallLog.post_id == UUID(post["id"]))
+        )
+        assert call is not None and call.operation == "embedding_generate"
 
 
 def test_permanent_failure_is_not_retried(image_api: ImageApiContext) -> None:

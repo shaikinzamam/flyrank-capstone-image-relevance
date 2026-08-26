@@ -554,3 +554,96 @@ This log records how AI assistance was used, which design choices were made, and
 
 - No authentication, tenancy, object storage, Kubernetes, Redis, Celery, GraphQL,
   Three.js, new production model provider, or Phase 13 packaging work.
+
+## 2026-08-25 — Phase 12.5 mandatory-requirement correction
+
+### Scope and implementation
+
+- Kept Phase 13 paused and changed only the seven audited blockers plus their
+  tests/documentation. Matching thresholds, labels, guard order, and decisions
+  remain unchanged.
+- Added persisted workspaces and API credentials. Bearer secrets are random
+  256-bit values; only SHA-256 digests and non-secret prefixes are stored, and
+  authentication uses constant-time digest comparison. Health/readiness remain
+  public; tenant routes resolve a workspace and return `404` for foreign IDs.
+- Added workspace ownership to top-level tenant records and derived child
+  ownership through foreign keys. Repository queries scope data access, while
+  image hashes and job idempotency are unique per workspace.
+- Extended the existing leased PostgreSQL worker: image items now require both
+  validated vision metadata and an image embedding before success; transient
+  embedding retries reuse metadata. Post embedding now creates a `202`
+  `post_embedding` job. Synchronous endpoints are deprecated debug-only paths.
+- Replaced the empty corpus manifest with 50 Wikimedia Commons records across
+  fox, wolf, dog, bear, and deer. Each entry includes real provenance/licensing
+  metadata and a pinned SHA-256. The downloader validates bytes through the same
+  size, MIME, decode, format, and pixel rules as normal ingestion.
+- Rebuilt the seed around the real background pipeline. Probe 1 completed all 50
+  items with one deterministic low-confidence result. Separate inserted vectors
+  produced Probe 2 fox `1.00`, wolf `0.80`, dog `0.60`; the isolated wolf was
+  rejected for Probe 3 and yielded `NO_CONFIDENT_MATCH` for Probe 4.
+- Corrected official top-1 to `correct first suggestions / all evaluated posts`,
+  producing `3 / 10 = 0.3000`. Preserved the old useful calculation as
+  `issued_recommendation_precision`, producing `3 / 3 = 1.0000`, across storage,
+  API, CLI, frontend labels, tests, README, and evidence.
+
+### Migration strategy and findings
+
+- Migration `0010` creates a fixed legacy workspace, backfills existing top-level
+  rows, then adds non-null ownership and foreign keys without discarding prior
+  evidence. It changes only tenant-sensitive uniqueness, adds post job resources,
+  and migrates historical precision values into the newly named issued metric.
+- Initial PostgreSQL startup exposed an untyped text bind for the legacy UUID;
+  typed UUID bind parameters fixed it. A disposable database then passed full
+  upgrade, downgrade to `0009`, re-upgrade, and `alembic check` with no drift.
+- The first acceptance-key generation attempt used an unavailable static .NET
+  helper and produced a weak local value. The seed was hardened to revoke prior
+  same-name demo credentials when rotating; final verification uses the compatible
+  cryptographic RNG instance API and never logs the full value.
+
+### Final verification performed on 2026-08-26
+
+- Live auth returned `200` for public health/readiness, `401` for missing and
+  invalid bearer values, and `200` for a masked valid demo credential.
+- Two temporary live PostgreSQL workspaces passed 12 cross-tenant `404` checks
+  covering image/detail bytes, posts, image/post jobs, candidates, recommendation
+  creation/detail/reviews/actions, evaluation, and a foreign-image mutation.
+  Lists remained isolated (`A images=1`, `B images=1`, `A posts=0`), then only
+  those temporary workspaces were removed.
+- Final acceptance produced 50/50 batch successes, 50 metadata rows, one flagged
+  low-confidence deterministic corpus classification, 107 call-accounting rows,
+  fox/wolf/dog `1.00/0.80/0.60`, readable `SUBJECT_MISMATCH`, and
+  `NO_CONFIDENT_MATCH`. The CLI and database both reported `0.3000` official
+  top-1 and `1.0000` issued-recommendation precision.
+- Backend verification: local Python 3.13 `112 passed, 5 skipped`; explicitly
+  enabled PostgreSQL slice `5 passed`; Python 3.12 container with all PostgreSQL,
+  pgvector, and concurrency flags `117 passed`.
+- Frontend verification: Vitest `11 passed`; TypeScript and ESLint exited cleanly;
+  the clean optimized Next.js production build generated all six product routes.
+- Live database is `0010 (head)`, `alembic check` reports no drift, and inspected
+  constraints confirm workspace foreign keys plus `UNIQUE(workspace_id, sha256)`
+  and `UNIQUE(workspace_id, idempotency_key)`. Database, API, and frontend are
+  healthy; the worker is running.
+- Security checks found no tracked `.env`, private key, response schema exposing
+  `key_hash`, or runtime log containing a bearer/header/hash. The only tracked
+  `frk_`-shaped value is an explicit synthetic test credential.
+
+### Final-verification issues resolved
+
+- The resumed local virtual environment was missing compiled `pydantic_core` and
+  `psycopg_binary` modules; reinstalling their exact installed versions restored
+  the environment without changing project dependencies.
+- Two ignored corpus files had disappeared from the OneDrive working directory.
+  The resume-aware downloader validated the other 48 and fetched only the two
+  missing SHA-pinned files; the local corpus test then passed.
+- The frontend dependency tree was likewise incomplete. `npm ci` restored the
+  lockfile-defined tree with zero audit vulnerabilities. A stale generated
+  Turbopack cache referenced a missing `.sst`; removing only `.next` produced a
+  clean successful build.
+- The first live tenant probe suffered PowerShell quote stripping; its `finally`
+  cleanup succeeded. Base64 transport reran the unchanged probe successfully.
+
+### Intentionally not added
+
+- No OAuth, passwords, invitations, RBAC, external identity service, Redis,
+  Celery, object-storage redesign, threshold tuning, label edits, or Phase 13
+  submission packaging was added.

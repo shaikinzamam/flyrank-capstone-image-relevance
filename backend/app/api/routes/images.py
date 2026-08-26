@@ -51,10 +51,15 @@ from app.api.routes.jobs import job_response
 router = APIRouter(prefix="/images", tags=["images"])
 
 
-@router.post("/{image_id}/embedding", response_model=EmbeddingResponse)
-def create_image_embedding(
+@router.post(
+    "/{image_id}/embedding/debug-sync",
+    response_model=EmbeddingResponse,
+    deprecated=True,
+)
+def create_image_embedding_debug(
     image_id: UUID, service: Embeddings
 ) -> EmbeddingResponse:
+    """Development-only diagnostic; production image embeddings run in jobs."""
     try:
         embedding, reused = service.embed_image(image_id)
     except ImageNotFoundError as exc:

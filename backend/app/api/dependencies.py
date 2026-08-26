@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -14,7 +15,13 @@ from app.repositories.posts import PostRepository
 from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.repositories.evaluations import EvaluationRepository
+from app.repositories.auth import AuthRepository
+from app.models.workspace import Workspace
 from app.providers.embedding import EmbeddingProvider, SentenceTransformerEmbeddingProvider
+from app.providers.corpus import (
+    CorpusFixtureEmbeddingProvider,
+    CorpusFixtureVisionProvider,
+)
 from app.providers.vision import GeminiVisionProvider, VisionProvider
 from app.providers.fake import FakeVisionProvider
 from app.services.image_analysis import ImageAnalysisService
@@ -28,8 +35,37 @@ from app.services.recommendations import RecommendationService
 from app.services.recommendation_reviews import RecommendationReviewService
 from app.services.evaluation import EvaluationService
 from app.services.readiness import DatabaseReadinessService
+from app.services.auth import AuthenticationService, InvalidApiCredentialError
 
 DatabaseSession = Annotated[Session, Depends(get_db_session)]
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_workspace(
+    session: DatabaseSession,
+    credential: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ],
+) -> Workspace:
+    if credential is None or credential.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bearer API credential required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        return AuthenticationService(AuthRepository(session)).authenticate(
+            credential.credentials
+        )
+    except InvalidApiCredentialError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API credential",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
+AuthenticatedWorkspace = Annotated[Workspace, Depends(get_current_workspace)]
 
 
 def get_readiness_service(session: DatabaseSession) -> DatabaseReadinessService:
@@ -54,9 +90,10 @@ def get_image_storage() -> LocalImageStorage:
 
 def get_image_asset_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
     storage: Annotated[LocalImageStorage, Depends(get_image_storage)],
 ) -> ImageAssetService:
-    return ImageAssetService(ImageAssetRepository(session), storage)
+    return ImageAssetService(ImageAssetRepository(session, workspace.id), storage)
 
 
 ImageAssetsService = Annotated[
@@ -68,6 +105,8 @@ ImageAssetsService = Annotated[
 @lru_cache
 def get_vision_provider() -> VisionProvider:
     settings = get_settings()
+    if settings.vision_provider == "corpus_fixture":
+        return CorpusFixtureVisionProvider(settings.corpus_manifest_path)
     if settings.vision_provider == "fake":
         return FakeVisionProvider(
             {
@@ -93,13 +132,14 @@ def get_vision_provider() -> VisionProvider:
 
 def get_image_analysis_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
     storage: Annotated[LocalImageStorage, Depends(get_image_storage)],
     provider: Annotated[VisionProvider, Depends(get_vision_provider)],
 ) -> ImageAnalysisService:
     settings = get_settings()
     return ImageAnalysisService(
-        ImageAssetRepository(session),
-        ImageMetadataRepository(session),
+        ImageAssetRepository(session, workspace.id),
+        ImageMetadataRepository(session, workspace.id),
         storage,
         provider,
         low_confidence_threshold=settings.vision_low_confidence_threshold,
@@ -113,11 +153,14 @@ ImageAnalysis = Annotated[
 ]
 
 
-def get_processing_job_service(session: DatabaseSession) -> ProcessingJobService:
+def get_processing_job_service(
+    session: DatabaseSession, workspace: AuthenticatedWorkspace
+) -> ProcessingJobService:
     settings = get_settings()
     return ProcessingJobService(
-        ProcessingJobRepository(session),
-        ImageAssetRepository(session),
+        ProcessingJobRepository(session, workspace.id),
+        ImageAssetRepository(session, workspace.id),
+        PostRepository(session, workspace.id),
         max_attempts=settings.processing_max_attempts,
     )
 
@@ -131,6 +174,8 @@ ProcessingJobs = Annotated[
 @lru_cache
 def get_embedding_provider() -> EmbeddingProvider:
     settings = get_settings()
+    if settings.embedding_provider == "corpus_fixture":
+        return CorpusFixtureEmbeddingProvider()
     if settings.embedding_provider != "local":
         raise RuntimeError("Unsupported EMBEDDING_PROVIDER configuration")
     return SentenceTransformerEmbeddingProvider(
@@ -143,13 +188,14 @@ def get_embedding_provider() -> EmbeddingProvider:
 
 def get_embedding_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
     provider: Annotated[EmbeddingProvider, Depends(get_embedding_provider)],
 ) -> EmbeddingService:
     return EmbeddingService(
-        EmbeddingRepository(session),
-        ImageAssetRepository(session),
-        ImageMetadataRepository(session),
-        PostRepository(session),
+        EmbeddingRepository(session, workspace.id),
+        ImageAssetRepository(session, workspace.id),
+        ImageMetadataRepository(session, workspace.id),
+        PostRepository(session, workspace.id),
         provider,
     )
 
@@ -157,8 +203,10 @@ def get_embedding_service(
 Embeddings = Annotated[EmbeddingService, Depends(get_embedding_service)]
 
 
-def get_post_service(session: DatabaseSession) -> PostService:
-    return PostService(PostRepository(session))
+def get_post_service(
+    session: DatabaseSession, workspace: AuthenticatedWorkspace
+) -> PostService:
+    return PostService(PostRepository(session, workspace.id))
 
 
 Posts = Annotated[PostService, Depends(get_post_service)]
@@ -166,11 +214,12 @@ Posts = Annotated[PostService, Depends(get_post_service)]
 
 def get_image_retrieval_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
     provider: Annotated[EmbeddingProvider, Depends(get_embedding_provider)],
 ) -> ImageRetrievalService:
     return ImageRetrievalService(
-        PostRepository(session),
-        ImageRetrievalRepository(session),
+        PostRepository(session, workspace.id),
+        ImageRetrievalRepository(session, workspace.id),
         embedding_model=provider.model_name,
         embedding_version=provider.model_version,
         dimensions=provider.dimensions,
@@ -184,12 +233,13 @@ ImageRetrieval = Annotated[
 
 def get_recommendation_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
     retrieval: ImageRetrieval,
 ) -> RecommendationService:
     return RecommendationService(
-        PostRepository(session),
+        PostRepository(session, workspace.id),
         retrieval,
-        RecommendationRepository(session),
+        RecommendationRepository(session, workspace.id),
     )
 
 
@@ -200,11 +250,12 @@ Recommendations = Annotated[
 
 def get_recommendation_review_service(
     session: DatabaseSession,
+    workspace: AuthenticatedWorkspace,
 ) -> RecommendationReviewService:
     return RecommendationReviewService(
-        RecommendationRepository(session),
-        PostRepository(session),
-        ImageAssetRepository(session),
+        RecommendationRepository(session, workspace.id),
+        PostRepository(session, workspace.id),
+        ImageAssetRepository(session, workspace.id),
     )
 
 
@@ -213,10 +264,12 @@ RecommendationReviews = Annotated[
 ]
 
 
-def get_evaluation_service(session: DatabaseSession) -> EvaluationService:
+def get_evaluation_service(
+    session: DatabaseSession, workspace: AuthenticatedWorkspace
+) -> EvaluationService:
     settings = get_settings()
     return EvaluationService(
-        EvaluationRepository(session), settings.evaluation_dataset_path
+        EvaluationRepository(session, workspace.id), settings.evaluation_dataset_path
     )
 
 

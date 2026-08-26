@@ -32,8 +32,8 @@ Thumbs.db
 uploads/
 artifacts/
 evaluation-results/
+data/corpus/
 
 # Local database and model caches
 *.sqlite3
 .cache/
-

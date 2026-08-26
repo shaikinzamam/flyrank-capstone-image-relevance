@@ -2,11 +2,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.dependencies import Embeddings, ImageRetrieval, Posts, Recommendations
+from app.api.dependencies import Embeddings, ImageRetrieval, Posts, ProcessingJobs, Recommendations
+from app.api.routes.jobs import job_response
 from app.schemas.embedding import EmbeddingResponse
+from app.schemas.processing_job import CreateEmbeddingJobRequest, ProcessingJobResponse
 from app.schemas.post import CreatePostRequest, PostResponse
 from app.schemas.retrieval import ImageCandidatesResponse
 from app.schemas.recommendation import RecommendationResponse
+from app.services.processing_jobs import IdempotencyConflictError, ProcessingPostNotFoundError
 from app.services.embeddings import (
     EmbeddingConfigurationError,
     EmbeddingPersistenceError,
@@ -91,8 +94,34 @@ def get_post(post_id: UUID, service: Posts) -> PostResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{post_id}/embedding", response_model=EmbeddingResponse)
-def create_post_embedding(post_id: UUID, service: Embeddings) -> EmbeddingResponse:
+@router.post(
+    "/{post_id}/embedding",
+    response_model=ProcessingJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def create_post_embedding(
+    post_id: UUID, request: CreateEmbeddingJobRequest, service: ProcessingJobs
+) -> ProcessingJobResponse:
+    try:
+        job, reused = service.create_post_embedding(
+            post_id, idempotency_key=request.idempotency_key
+        )
+    except ProcessingPostNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return job_response(job, reused=reused)
+
+
+@router.post(
+    "/{post_id}/embedding/debug-sync",
+    response_model=EmbeddingResponse,
+    deprecated=True,
+)
+def create_post_embedding_debug(
+    post_id: UUID, service: Embeddings
+) -> EmbeddingResponse:
+    """Development-only synchronous diagnostic; production clients enqueue jobs."""
     try:
         embedding, reused = service.embed_post(post_id)
     except PostNotFoundError as exc:

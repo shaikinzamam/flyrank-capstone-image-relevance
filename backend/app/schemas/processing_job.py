@@ -29,6 +29,15 @@ class CreateProcessingJobRequest(BaseModel):
         return value
 
 
+class CreateEmbeddingJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idempotency_key: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=128),
+    ]
+
+
 class ProcessingJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,7 +61,8 @@ class ProcessingJobItemResponse(BaseModel):
 
     id: UUID
     job_id: UUID
-    image_id: UUID
+    image_id: UUID | None
+    post_id: UUID | None
     status: JobItemStatusValue
     attempt_count: int
     max_attempts: int

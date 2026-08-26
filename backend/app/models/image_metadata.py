@@ -89,10 +89,16 @@ class AiCallLog(Base):
         ),
         Index("ix_ai_call_logs_image_id_created_at", "image_id", "created_at"),
         Index("ix_ai_call_logs_post_id_created_at", "post_id", "created_at"),
+        Index("ix_ai_call_logs_workspace_created_at", "workspace_id", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(
         Uuid(as_uuid=True), primary_key=True, default=uuid4
+    )
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     image_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),

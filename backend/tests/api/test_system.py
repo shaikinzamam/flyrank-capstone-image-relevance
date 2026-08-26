@@ -42,8 +42,8 @@ def test_cors_configuration_rejects_wildcards() -> None:
         Settings(_env_file=None, CORS_ALLOWED_ORIGINS="*")
 
 
-def test_malformed_uuid_is_a_clean_validation_error(client: TestClient) -> None:
-    response = client.get("/images/not-a-uuid")
+def test_malformed_uuid_is_a_clean_validation_error(image_api) -> None:
+    response = image_api.client.get("/images/not-a-uuid")
 
     assert response.status_code == 422
     assert "traceback" not in response.text.lower()

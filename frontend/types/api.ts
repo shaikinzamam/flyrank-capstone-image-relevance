@@ -75,6 +75,19 @@ export interface PostRecord extends PostInput {
   updated_at: string;
 }
 
+export interface ProcessingJob {
+  id: string;
+  job_type: "image_processing" | "post_embedding";
+  status: "pending" | "running" | "completed" | "completed_with_errors" | "failed";
+  total_items: number;
+  processed_items: number;
+  failed_items: number;
+  progress: number;
+  idempotency_key: string;
+  failure_summary: string | null;
+  reused: boolean;
+}
+
 export interface ImageCandidate {
   rank: number;
   image_id: string;
@@ -197,6 +210,7 @@ export interface EvaluationRun {
   unsafe_acceptance_count: number;
   correct_safe_rejections: number;
   top1_precision: number;
+  issued_recommendation_precision: number;
   safe_acceptance_precision: number;
   unsafe_rejection_recall: number;
   examples: EvaluationExampleResult[];

@@ -16,6 +16,7 @@ from app.models.recommendation import (
     RecommendationReview,
     RecommendationRun,
 )
+from app.models.workspace import Workspace
 from app.repositories.image_assets import ImageAssetRepository
 from app.repositories.image_retrieval import ImageRetrievalRepository
 from app.repositories.posts import PostRepository
@@ -23,6 +24,7 @@ from app.repositories.recommendations import RecommendationRepository
 from app.services.image_retrieval import ImageRetrievalService
 from app.services.recommendations import RecommendationService
 from app.services.recommendation_reviews import RecommendationReviewService
+from tests.conftest import create_postgres_workspace
 
 pytestmark = pytest.mark.skipif(
     os.getenv("TEST_POSTGRES_PGVECTOR") != "1",
@@ -41,10 +43,13 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
     fox_id = uuid4()
     model = f"guard-persistence-{uuid4().hex}"
     version = "1"
+    workspace_id = None
     try:
         with Session(engine) as session:
+            workspace_id = create_postgres_workspace(session, "recommendation-pg")
             session.add(
                 Post(
+                    workspace_id=workspace_id,
                     id=post_id,
                     title="How red foxes survive winter",
                     body="Red fox winter behavior",
@@ -70,6 +75,7 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
                 token = uuid4().hex
                 session.add(
                     ImageAsset(
+                        workspace_id=workspace_id,
                         id=image_id,
                         filename=f"{code}.png",
                         storage_key=f"guard/{token}.png",
@@ -111,16 +117,16 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
 
         with Session(engine) as session:
             retrieval = ImageRetrievalService(
-                PostRepository(session),
-                ImageRetrievalRepository(session),
+                PostRepository(session, workspace_id),
+                ImageRetrievalRepository(session, workspace_id),
                 embedding_model=model,
                 embedding_version=version,
                 dimensions=384,
             )
             result = RecommendationService(
-                PostRepository(session),
+                PostRepository(session, workspace_id),
                 retrieval,
-                RecommendationRepository(session),
+                RecommendationRepository(session, workspace_id),
             ).create(post_id, top_k=2)
             persisted_run = session.get(RecommendationRun, result.run_id)
             persisted = list(
@@ -142,9 +148,9 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
             persisted_similarities = [item.similarity_score for item in persisted]
             reviewed_recommendation_id = persisted[1].id
             review = RecommendationReviewService(
-                RecommendationRepository(session),
-                PostRepository(session),
-                ImageAssetRepository(session),
+                RecommendationRepository(session, workspace_id),
+                PostRepository(session, workspace_id),
+                ImageAssetRepository(session, workspace_id),
             ).review(
                 reviewed_recommendation_id,
                 HumanReviewDecision.APPROVED,
@@ -180,7 +186,7 @@ def test_postgresql_persists_guarded_fox_over_higher_ranked_wolf() -> None:
         ) == original_evidence
     finally:
         with Session(engine) as session:
-            session.execute(delete(Post).where(Post.id == post_id))
-            session.execute(delete(ImageAsset).where(ImageAsset.id.in_([wolf_id, fox_id])))
+            if workspace_id is not None:
+                session.execute(delete(Workspace).where(Workspace.id == workspace_id))
             session.commit()
         engine.dispose()

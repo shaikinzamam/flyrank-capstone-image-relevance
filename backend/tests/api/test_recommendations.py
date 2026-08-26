@@ -162,7 +162,7 @@ def test_required_tag_is_enforced_by_recommendation_endpoint(
     assert created.status_code == 201
     post = created.json()
     image_api.embedding_provider.output = vector(1.0)
-    assert image_api.client.post(f"/posts/{post['id']}/embedding").status_code == 200
+    assert image_api.client.post(f"/posts/{post['id']}/embedding/debug-sync").status_code == 200
     fox = create_image(image_api, "red_fox", similarity_vector(0.90))
     with image_api.session_factory() as session:
         metadata = session.scalar(

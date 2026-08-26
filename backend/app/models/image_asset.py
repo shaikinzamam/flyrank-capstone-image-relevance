@@ -2,7 +2,16 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, String, Uuid, func
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -25,6 +34,9 @@ class ImageAsset(Base):
             "('uploaded', 'queued', 'processing', 'processed', 'failed')",
             name="ck_image_assets_processing_status",
         ),
+        UniqueConstraint(
+            "workspace_id", "sha256", name="uq_image_assets_workspace_sha256"
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -32,11 +44,14 @@ class ImageAsset(Base):
         primary_key=True,
         default=uuid4,
     )
+    workspace_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str] = mapped_column(String(255), unique=True)
     mime_type: Mapped[str] = mapped_column(String(32))
     byte_size: Mapped[int] = mapped_column(BigInteger)
-    sha256: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
     processing_status: Mapped[str] = mapped_column(
         String(20),
         default=ProcessingStatus.UPLOADED.value,
