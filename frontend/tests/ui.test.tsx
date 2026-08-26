@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import axe from "axe-core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LandingHero } from "@/components/landing/LandingHero";
+import { AuthenticatedImage } from "@/components/images/AuthenticatedImage";
 import { ThreeDImageCard, calculateTilt } from "@/components/images/ThreeDImageCard";
 import { CandidateList } from "@/components/matching/CandidateList";
 import { MismatchGuardPanel } from "@/components/matching/MismatchGuardPanel";
@@ -10,6 +11,28 @@ import { ReviewPanel } from "@/components/review/ReviewPanel";
 import { EvaluationDashboardView } from "@/components/evaluation/EvaluationDashboardView";
 import { ErrorState } from "@/components/ui/AsyncState";
 import type { CandidateDecision, EvaluationRun, RecommendationDetail } from "@/types/api";
+
+const imageFetch = vi.fn();
+const createObjectURL = vi.fn(() => "blob:authenticated-image");
+const revokeObjectURL = vi.fn();
+
+beforeEach(() => {
+  imageFetch.mockResolvedValue(
+    new Response(new Blob(["image-bytes"], { type: "image/png" }), {
+      status: 200,
+      headers: { "Content-Type": "image/png" },
+    }),
+  );
+  vi.stubGlobal("fetch", imageFetch);
+  URL.createObjectURL = createObjectURL;
+  URL.revokeObjectURL = revokeObjectURL;
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.clearAllMocks();
+});
 
 const decision: CandidateDecision = {
   recommendation_id: "recommendation-1", image_id: "image-1", rank: 1,
@@ -37,11 +60,42 @@ describe("Phase 11 interface", () => {
     expect(screen.getByRole("link", { name: /Explore Image Library/ })).toHaveAttribute("href", "/images");
   });
 
-  it("renders typed image card metadata", () => {
-    render(<ThreeDImageCard imageUrl="http://localhost:8000/images/1/content" alt="A fox" subject="Red Fox" category="animal" confidence={.96} tags={["snow", "forest"]} status="processed" />);
-    expect(screen.getByRole("img", { name: "A fox" })).toBeInTheDocument();
+  it("renders typed image card metadata from an authenticated blob", async () => {
+    const { unmount } = render(<ThreeDImageCard imageId="image-1" alt="A fox" subject="Red Fox" category="animal" confidence={.96} tags={["snow", "forest"]} status="processed" />);
+    expect(await screen.findByRole("img", { name: "A fox" })).toHaveAttribute(
+      "src",
+      "blob:authenticated-image",
+    );
     expect(screen.getByText("96%")).toBeInTheDocument();
     expect(screen.getByText("snow")).toBeInTheDocument();
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:authenticated-image");
+  });
+
+  it("sends bearer authentication when fetching protected image bytes", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_KEY", "synthetic-browser-test-key");
+    vi.resetModules();
+    const { fetchImageContent } = await import("@/lib/api/images");
+    await fetchImageContent("image-1");
+    const [, request] = imageFetch.mock.calls.at(-1) as [string, RequestInit];
+    expect(new Headers(request.headers).get("Authorization")).toBe(
+      "Bearer synthetic-browser-test-key",
+    );
+    expect(imageFetch.mock.calls.at(-1)?.[0]).toBe(
+      "http://localhost:8000/images/image-1/content",
+    );
+  });
+
+  it("shows accessible fallback alt text when protected image fetching fails", async () => {
+    imageFetch.mockRejectedValueOnce(new Error("network unavailable"));
+    render(
+      <div className="relative h-40">
+        <AuthenticatedImage imageId="image-2" alt="A gray wolf" fill />
+      </div>,
+    );
+    expect(await screen.findByRole("img", { name: "A gray wolf" })).toHaveTextContent(
+      "Preview unavailable",
+    );
   });
 
   it("renders raw candidates in semantic rank order", () => {

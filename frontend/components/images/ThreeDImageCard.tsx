@@ -1,14 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { motion, useMotionValue, useReducedMotion, useSpring } from "motion/react";
 import type { PointerEvent } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { AuthenticatedImage } from "./AuthenticatedImage";
 
 export interface ThreeDImageCardProps {
   id?: string;
-  imageUrl: string;
+  imageId: string;
   alt: string;
   subject: string;
   category: string;
@@ -61,7 +61,7 @@ export function ThreeDImageCard(props: ThreeDImageCardProps) {
       transition={{ type: "spring", stiffness: 220, damping: 24 }}
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-slate-900" style={{ transform: "translateZ(18px)" }}>
-        <Image loader={({ src }) => src} unoptimized src={props.imageUrl} alt={props.alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-[1.025]" />
+        <AuthenticatedImage imageId={props.imageId} alt={props.alt} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-500 group-hover:scale-[1.025]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#09131b]/80 via-transparent to-transparent" />
         <div className="absolute left-3 top-3"><StatusBadge status={props.status} /></div>
       </div>

@@ -54,6 +54,34 @@ export async function apiRequest<T>(
   return payload as T;
 }
 
+export async function apiBlobRequest(
+  path: string,
+  init?: RequestInit,
+): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init,
+      headers: {
+        ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "AbortError") throw reason;
+    throw new ApiError(
+      "The API is unreachable. Confirm the backend is running and try again.",
+      0,
+    );
+  }
+  if (!response.ok) {
+    const payload: unknown = await response.json().catch(() => null);
+    const detail = isErrorPayload(payload) ? payload.detail : "Image request failed";
+    throw new ApiError(humanizeApiError(response.status, detail), response.status);
+  }
+  return response.blob();
+}
+
 function humanizeApiError(status: number, detail: string): string {
   if (status === 409 && detail.toLowerCase().includes("embedding")) {
     return "Generate the post embedding before searching for images.";
