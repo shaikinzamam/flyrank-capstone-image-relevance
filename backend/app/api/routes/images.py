@@ -1,9 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.api.dependencies import Embeddings, ImageAnalysis, ImageAssetsService, ProcessingJobs
+from app.api.dependencies import (
+    Embeddings,
+    ImageAnalysis,
+    ImageAssetsService,
+    ProcessingJobs,
+    require_development_environment,
+)
 from app.schemas.embedding import EmbeddingResponse
 from app.schemas.image_asset import (
     ImageAssetResponse,
@@ -55,6 +61,7 @@ router = APIRouter(prefix="/images", tags=["images"])
     "/{image_id}/embedding/debug-sync",
     response_model=EmbeddingResponse,
     deprecated=True,
+    dependencies=[Depends(require_development_environment)],
 )
 def create_image_embedding_debug(
     image_id: UUID, service: Embeddings
@@ -210,6 +217,7 @@ def get_image_content(image_id: UUID, service: ImageAssetsService) -> FileRespon
     "/{image_id}/analyze",
     response_model=AnalyzeImageResponse,
     deprecated=True,
+    dependencies=[Depends(require_development_environment)],
 )
 def analyze_image(
     image_id: UUID,

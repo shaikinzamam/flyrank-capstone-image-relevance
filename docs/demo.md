@@ -49,6 +49,10 @@ no-match explanations, human review, 107 call records, and both metrics.
 
 ## Useful verification commands
 
+The official walkthrough above remains deterministic. Optional measured evidence
+from the separate Gemini, pinned sentence-transformer, pgvector, and unchanged
+guard workflow is in `docs/live-model-evaluation.md`.
+
 ```powershell
 docker compose ps
 Invoke-RestMethod http://localhost:8000/health
@@ -56,4 +60,3 @@ Invoke-RestMethod http://localhost:8000/ready
 docker compose exec -T api alembic current
 docker compose exec -T api python -m scripts.evaluate
 ```
-

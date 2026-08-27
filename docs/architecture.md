@@ -89,7 +89,7 @@ Three.js, React Three Fiber, or frontend state framework is used.
 - Run vision and embedding operations outside HTTP requests.
 - Retry transient failures with bounded backoff.
 - Make duplicate delivery safe.
-- Record progress, costs, latency, failures, and terminal alerts.
+- Record progress, costs, latency, and persisted terminal failure state.
 
 The implemented Phase 5 worker is a separate `python -m
 app.workers.image_processing` process. It atomically selects eligible items with

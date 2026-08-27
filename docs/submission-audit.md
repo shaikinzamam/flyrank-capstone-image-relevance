@@ -1,7 +1,7 @@
 # Final Official Requirement Audit
 
 Audited against the FlyRank “AI Image Understanding & Content Matching Engine”
-brief (July 2026) and the Phase 13 verification run on 2026-08-26.
+brief (July 2026) and the current verification run on 2026-08-27.
 
 ## Core Definition of Done
 
@@ -18,7 +18,7 @@ brief (July 2026) and the Phase 13 verification run on 2026-08-26.
 | No safe candidate returns no confident match with reasons | PASS | Probe 4: null recommendation plus candidate rejection evidence |
 | Required models and indexes | PASS | Alembic `0010`; images, metadata/tags, vectors, posts, recommendations, reviews, jobs, call logs, evaluations |
 | Validated APIs and review workflow | PASS | API tests cover inspection, approve/reject, history, 4xx boundaries, and rejected-candidate `409` |
-| Tests cover schema, mismatch, and matching accuracy | PASS | Local `112 passed, 5 skipped`; PostgreSQL-enabled Python 3.12 `117 passed` |
+| Tests cover schema, mismatch, and matching accuracy | PASS | Default `125 passed, 5 skipped`; PostgreSQL-enabled Python 3.12 `130 passed` with no skips |
 | Labeled evaluation and README metric | PASS | `evaluation-v1`; official top-1 `3/10 = 0.3000` |
 | README, architecture diagram, submission files | PASS | `README.md`, `capstone.yaml`, `EVIDENCE.md`, `BUILDLOG.md`, `.env.example`, and `docs/architecture.md` |
 
@@ -66,4 +66,8 @@ brief (July 2026) and the Phase 13 verification run on 2026-08-26.
 | Agent QA for uncertain matches | N/A / not claimed |
 | Streams service node | N/A / not claimed |
 
-No mandatory failure remains.
+No mandatory deterministic acceptance failure remains. The separate authorized
+live-model run is documented in `docs/live-model-evaluation.md`: 9/10 successful,
+schema-valid and correct vision calls; 5/5 correct real pgvector top-1 results;
+one correct issued recommendation, four safe abstentions, and zero unsafe
+acceptances at `$0.010000` estimated Gemini cost.

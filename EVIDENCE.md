@@ -166,11 +166,12 @@ These checks establish infrastructure only and do not complete the feature-level
 - The unchanged `evaluation-v1` labels and `phase8-v1` thresholds produce official
   top-1 `0.3000`, issued-recommendation precision `1.0000`, seven correct
   refusals, zero incorrect refusals, and zero unsafe acceptances.
-- Final backend matrix: local `112 passed, 5 skipped`; PostgreSQL integration
-  slice `5 passed`; Python 3.12 container with PostgreSQL/pgvector/concurrency
-  enabled `117 passed`. Focused auth/tenant and accounting modules passed `4/4`
-  and `5/5` respectively.
-- Final frontend matrix: Vitest `11 passed`; TypeScript and ESLint passed; the
+- Current backend matrix: local and Python 3.12 container default suites each
+  passed `125` with 5 intentionally gated PostgreSQL tests skipped. The complete
+  Python 3.12 PostgreSQL/pgvector/concurrency suite passed all `130` tests with no
+  skips, including persistence, SQL cosine ranking, worker claiming,
+  recommendations, and evaluation persistence.
+- Current frontend matrix: Vitest `17 passed`; TypeScript and ESLint passed; the
   optimized production build compiled, typechecked, generated six routes, and
   finalized successfully.
 - Live auth returned health/readiness `200`, missing/invalid credentials `401`,
@@ -205,13 +206,14 @@ These checks establish infrastructure only and do not complete the feature-level
   It reproduced Probe 2 `1.00/0.80/0.60`, Probe 3 `SUBJECT_MISMATCH` with a
   readable explanation, Probe 4 `NO_CONFIDENT_MATCH`, official top-1 `0.3000`,
   issued precision `1.0000`, and zero unsafe acceptances.
-- Exact `capstone.yaml` commands passed after the documented ephemeral demo-key
-  prerequisite: Compose startup, seed, and container test (`112 passed, 5
-  intentionally gated PostgreSQL tests skipped`). The explicitly enabled Python
+- The 2026-08-26 Phase 13 snapshot passed the then-current `capstone.yaml`
+  commands: Compose startup, seed, and container test (`112 passed, 5`
+  intentionally gated PostgreSQL tests skipped). Its explicitly enabled Python
   3.12 PostgreSQL/pgvector/concurrency suite passed all `117` tests.
-- Local backend passed `112` with the same 5 PostgreSQL-only skips. Frontend
-  Vitest passed `11`; TypeScript, ESLint, production build, and full `npm audit`
-  passed, with zero vulnerabilities and all six product routes generated.
+- At that Phase 13 snapshot, the local backend passed `112` with the same 5
+  PostgreSQL-only skips and frontend Vitest passed `11`; TypeScript, ESLint,
+  production build, and full `npm audit` also passed. The current superseding
+  matrix is recorded in the 2026-08-27 section below.
 - PostgreSQL is at Alembic `0010 (head)` and `alembic check` reports no drift.
   Compose reports healthy database/API/frontend and a running worker.
 - GitHub's public API reports the dedicated repository public with default branch
@@ -222,6 +224,31 @@ These checks establish infrastructure only and do not complete the feature-level
   zero absolute Windows paths; and no private key, populated Gemini key, or real
   bearer value. Two `frk_` patterns are clearly synthetic test fixtures, and the
   same test-only commit is the sole history pattern match.
+
+## 2026-08-27 final review-improvement verification
+
+- The declared default test remains `docker compose exec -T api pytest`; it
+  passed `125` with the five explicitly gated PostgreSQL cases skipped.
+- The declared submission test now enables real PostgreSQL, pgvector, and
+  concurrency execution. The rebuilt Python 3.12 container passed all `130`
+  tests with no skips.
+- A production-environment API test proves synchronous image analysis plus image
+  and post `debug-sync` embedding routes return `404`; durable job endpoints are
+  unchanged.
+- The homepage test proves the accepted hero card selects seeded
+  `red_fox_01.jpg` and obtains protected bytes with bearer authentication rather
+  than placing credentials in an image URL. Frontend Vitest passed `17` checks.
+- `scripts.live_model_evaluation` defines a separate 10-image live workflow over
+  stable corpus records, Gemini schema validation/accounting, the pinned real
+  sentence-transformer, pgvector retrieval, and the unchanged guard. Its subset
+  selection and missing-secret boundary tests pass.
+- The authorized 2026-08-27 live run evaluated 10 images with
+  `gemini-3.6-flash`: 9/10 provider calls yielded schema-valid, correct taxonomy
+  output, while one provider request failed and was retained as a failure. Real
+  pgvector raw top-1 was correct for 5/5 posts. The unchanged guard issued one
+  correct recommendation, abstained on four, and made zero unsafe acceptances.
+  Estimated Gemini cost was `$0.010000`. Full call, ranking, and guard evidence is
+  in [`docs/live-model-evaluation.md`](docs/live-model-evaluation.md).
 
 ## AI processing
 

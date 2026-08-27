@@ -68,6 +68,12 @@ def get_current_workspace(
 AuthenticatedWorkspace = Annotated[Workspace, Depends(get_current_workspace)]
 
 
+def require_development_environment() -> None:
+    """Hide synchronous provider diagnostics outside local development."""
+    if get_settings().app_environment != "development":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
 def get_readiness_service(session: DatabaseSession) -> DatabaseReadinessService:
     return DatabaseReadinessService(session)
 

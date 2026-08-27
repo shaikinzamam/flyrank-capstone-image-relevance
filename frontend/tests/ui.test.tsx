@@ -21,12 +21,23 @@ beforeEach(() => {
     "NEXT_PUBLIC_API_KEY",
     "frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
   );
-  imageFetch.mockResolvedValue(
-    new Response(new Blob(["image-bytes"], { type: "image/png" }), {
-      status: 200,
-      headers: { "Content-Type": "image/png" },
-    }),
-  );
+  imageFetch.mockImplementation((input: string | URL | Request) => {
+    const url = String(input);
+    if (url.endsWith("/images")) {
+      return Promise.resolve(
+        new Response("[]", {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }
+    return Promise.resolve(
+      new Response(new Blob(["image-bytes"], { type: "image/png" }), {
+        status: 200,
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+  });
   vi.stubGlobal("fetch", imageFetch);
   URL.createObjectURL = createObjectURL;
   URL.revokeObjectURL = revokeObjectURL;
@@ -62,6 +73,51 @@ describe("Phase 11 interface", () => {
     render(<LandingHero />);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Find the Right Image");
     expect(screen.getByRole("link", { name: /Explore Image Library/ })).toHaveAttribute("href", "/images");
+  });
+
+  it("renders the deterministic red fox hero through authenticated image fetching", async () => {
+    imageFetch.mockImplementation((input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/images")) {
+        return Promise.resolve(
+          Response.json([
+            {
+              id: "fox-hero-id",
+              filename: "red_fox_01.jpg",
+              storage_key: "protected/red_fox_01.jpg",
+              mime_type: "image/jpeg",
+              byte_size: 100,
+              sha256: "a".repeat(64),
+              processing_status: "processed",
+              created_at: "2026-08-27T00:00:00Z",
+              updated_at: "2026-08-27T00:00:00Z",
+            },
+          ]),
+        );
+      }
+      return Promise.resolve(
+        new Response(new Blob(["fox-bytes"], { type: "image/jpeg" }), {
+          status: 200,
+          headers: { "Content-Type": "image/jpeg" },
+        }),
+      );
+    });
+
+    render(<LandingHero />);
+
+    expect(
+      await screen.findByRole("img", { name: "Red fox demo candidate" }),
+    ).toHaveAttribute("src", "blob:authenticated-image");
+    expect(imageFetch).toHaveBeenCalledWith(
+      "http://localhost:8000/images/fox-hero-id/content",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization:
+            "Bearer frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
+        }),
+      }),
+    );
+    expect(screen.queryByText("RF")).not.toBeInTheDocument();
   });
 
   it("renders typed image card metadata from an authenticated blob", async () => {

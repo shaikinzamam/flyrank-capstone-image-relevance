@@ -8,13 +8,15 @@ authentication:
   scheme: bearer_api_key
   demo_key_env: DEMO_API_KEY
   request_header: "Authorization: Bearer <DEMO_API_KEY>"
-  setup: "Generate a random 256-bit DEMO_API_KEY before run; set NEXT_PUBLIC_API_KEY to the same local-only value for the browser demo. README.md contains the exact PowerShell commands."
+  setup: "Generate a random 256-bit DEMO_API_KEY before run. Docker Compose derives the browser build-time key from that same local-only value. README.md contains the exact PowerShell commands."
   persisted_form: sha256_digest_only
   public_endpoints: [/health, /ready]
 
 run: "docker compose up --build -d"
 seed: "docker compose exec -T api python -m scripts.seed"
-test: "docker compose exec -T api pytest"
+unit_test: "docker compose exec -T api pytest"
+integration_test: "docker compose exec -T -e TEST_POSTGRES_PGVECTOR=1 -e TEST_POSTGRES_CONCURRENCY=1 api pytest"
+test: "docker compose exec -T -e TEST_POSTGRES_PGVECTOR=1 -e TEST_POSTGRES_CONCURRENCY=1 api pytest"
 base_url: http://localhost:8000
 frontend_url: http://localhost:3000
 

@@ -728,3 +728,55 @@ This log records how AI assistance was used, which design choices were made, and
 - No hosted deployment, new provider, feature, threshold change, evaluation-label
   edit, recommendation change, history rewrite, or screenshot tooling was added.
   Docker Compose remains the reproducible submission runtime.
+
+## 2026-08-27 — Final external-review improvement pass
+
+### Credential lifecycle correction
+
+- The local demo previously had two independent configuration inputs:
+  `DEMO_API_KEY` for seeding and `NEXT_PUBLIC_API_KEY` for the Next.js build. A
+  stale or placeholder browser value could therefore disagree with the persisted
+  credential.
+- The seed also queried only active hashes. If the globally unique hash already
+  existed in a revoked row, it attempted a duplicate insert instead of
+  reactivating that row.
+- The repaired service queries the hash regardless of status, preserves global
+  uniqueness, reactivates the matching same-workspace row, revokes other named
+  local-demo credentials during rotation, and leaves exactly one active demo
+  credential. Compose derives the browser build argument directly from the one
+  server-side `DEMO_API_KEY`. Blank, malformed, and placeholder-like values fail
+  clearly. Production authentication was not weakened.
+
+### Submission accuracy and production boundary
+
+- Added a separate live-model evaluation runner for two stable corpus images per
+  subject. It uses Gemini through existing schema validation/accounting, embeds
+  valid unedited output with the pinned sentence-transformer, executes real
+  pgvector ranking, and passes results through the unchanged guard. It writes no
+  credential to output.
+- The first authorized attempt exposed provider lifecycle drift:
+  `gemini-2.5-flash` returned `404` for new users. The configurable default and
+  example were updated to `gemini-3.6-flash`; the credential itself was valid and
+  remained server-only. The final 10-image run produced 9/10 schema-valid,
+  correct classifications, 5/5 correct raw pgvector top-1 results, one correct
+  issued recommendation, four safe abstentions, zero unsafe acceptances, and a
+  `$0.010000` estimated Gemini cost. One provider failure is preserved in the
+  report rather than retried away or excluded.
+- Synchronous image analysis and image/post embedding diagnostics now return
+  `404` outside `APP_ENV=development`. Durable image and post job behavior is
+  unchanged.
+- Replaced the architecture's unsupported “terminal alerts” claim with persisted
+  terminal failure state. Updated demo-key setup to one Compose source and exposed
+  separate default and fully enabled PostgreSQL test commands.
+- Preserved deterministic acceptance providers, guard thresholds, evaluation
+  labels, retrieval rules, and recommendation behavior.
+
+### Verification
+
+- Local Python 3.13 and rebuilt Python 3.12 container default suites each passed
+  `125` tests with 5 explicitly gated PostgreSQL tests skipped.
+- The official full Python 3.12 container command enabled migrated PostgreSQL,
+  pgvector, and concurrency tests and passed all `130` with no skips.
+- Frontend Vitest passed `17`; TypeScript, changed-file ESLint, and the clean
+  optimized production build passed. The accepted homepage card now renders
+  protected seeded `red_fox_01.jpg` through the authenticated blob path.

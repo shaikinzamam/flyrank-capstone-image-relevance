@@ -122,12 +122,11 @@ $bytes = New-Object byte[] 32
 $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
 $rng.GetBytes($bytes)
 $env:DEMO_API_KEY = 'frk_' + [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
-$env:NEXT_PUBLIC_API_KEY = $env:DEMO_API_KEY
 docker compose up --build -d
 docker compose ps
 docker compose exec -T api alembic current
 docker compose exec -T api python -m scripts.seed
-docker compose exec -T api pytest
+docker compose exec -T -e TEST_POSTGRES_PGVECTOR=1 -e TEST_POSTGRES_CONCURRENCY=1 api pytest
 ```
 
 The evaluator uses `$env:DEMO_API_KEY` as `Authorization: Bearer
@@ -156,6 +155,8 @@ and a total budget. `NEXT_PUBLIC_API_BASE_URL` is intentionally public and is
 baked into the browser bundle at frontend build time; database credentials and
 Gemini keys are server-only. `CORS_ALLOWED_ORIGINS` is a comma-separated explicit
 HTTP(S) origin list; wildcard origins are rejected and credentials are disabled.
+Compose derives the local-only `NEXT_PUBLIC_API_KEY` build argument directly from
+`DEMO_API_KEY`; it is not a second independently configured Docker credential.
 
 All application routes except `GET /health` and `GET /ready` require
 `Authorization: Bearer <api-key>`. Only a SHA-256 digest of the random 256-bit
@@ -207,7 +208,7 @@ Three.js and React Three Fiber remain excluded.
 Register an image with multipart form data and inspect registered assets with:
 
 ```powershell
-curl.exe -H "Authorization: Bearer $env:DEMO_API_KEY" -F "file=@C:\path\to\image.png;type=image/png" http://localhost:8000/images
+curl.exe -H "Authorization: Bearer $env:DEMO_API_KEY" -F "file=@.\sample-image.png;type=image/png" http://localhost:8000/images
 Invoke-RestMethod -Headers $headers http://localhost:8000/images
 Invoke-RestMethod -Headers $headers http://localhost:8000/images/{image_id}
 ```
@@ -224,8 +225,9 @@ row already exists. The explicit `reprocess=true` form calls the provider and
 replaces that row only after the new output passes validation. This Phase 4 HTTP
 flow is intentionally synchronous; durable batch/background processing and retry
 orchestration are implemented by the Phase 5 job path. This synchronous endpoint
-is deprecated and retained only for explicit development/debug use; production
-clients should create jobs instead.
+is deprecated and retained only for explicit development/debug use. It and both
+`/embedding/debug-sync` routes return `404` unless `APP_ENV=development`;
+production clients must create durable jobs instead.
 
 Queue one or more uploaded images without waiting for vision processing:
 
@@ -347,6 +349,54 @@ operations are `POST /evaluation/run`, `GET /evaluation/latest`, and
 `GET /evaluation/{run_id}`. Evaluation fixtures run in isolated in-memory databases;
 only the final structured report enters the normal application database.
 
+### Optional live-model verification
+
+The official baseline remains deterministic and requires no paid service or
+credential. A separate operator workflow exercises actual Gemini vision, the
+pinned `sentence-transformers/all-MiniLM-L6-v2` revision, real pgvector ranking,
+the unchanged mismatch guard, and existing per-call accounting on two images from
+each of the five corpus subjects.
+
+Set `GEMINI_API_KEY` only in the ignored root `.env`, keep
+`VISION_ESTIMATED_COST_PER_CALL_USD` at an explicit conservative estimate, rebuild
+the API container so it receives the server-only value, and run:
+
+```powershell
+docker compose up --build -d api
+docker compose exec -T api python -m scripts.live_model_evaluation `
+  --per-subject 2 `
+  --json-output /tmp/live-model-evaluation.json `
+  --markdown-output /tmp/live-model-evaluation.md
+New-Item -ItemType Directory -Force backend/artifacts | Out-Null
+docker compose cp api:/tmp/live-model-evaluation.json backend/artifacts/live-model-evaluation.json
+docker compose cp api:/tmp/live-model-evaluation.md docs/live-model-evaluation.md
+```
+
+The runner never reads a browser variable and never writes the Gemini key to its
+JSON, Markdown, or logs. It uses stable corpus records `01` and `02` for each
+subject, preserves schema or classification failures as measured, and writes raw
+rankings and guard decisions without changing thresholds, labels, or deterministic
+fixtures. The measured 2026-08-27 run is recorded in
+[`docs/live-model-evaluation.md`](docs/live-model-evaluation.md); the detailed JSON
+artifact remains ignored.
+
+### Test commands
+
+The fast/default suite intentionally skips tests requiring a migrated PostgreSQL
+database:
+
+```powershell
+docker compose exec -T api pytest
+```
+
+The submission command enables all PostgreSQL, pgvector, recommendation,
+evaluation-persistence, and concurrency checks against the migrated Compose
+database:
+
+```powershell
+docker compose exec -T -e TEST_POSTGRES_PGVECTOR=1 -e TEST_POSTGRES_CONCURRENCY=1 api pytest
+```
+
 ### Measured baseline
 
 - Dataset: `evaluation-v1` (10 explicitly labeled examples)
@@ -417,8 +467,8 @@ The exact 5–6 minute reviewer walkthrough is in
 
 To demonstrate the durable worker separately, upload a valid local JPEG/PNG/WEBP,
 submit its returned UUID to `POST /images/process`, and poll the job commands in
-the earlier processing section. The Compose default uses a deterministic fake
-vision response and incurs no external cost.
+the earlier processing section. The Compose default uses the deterministic
+corpus-fixture vision provider and incurs no external cost.
 
 ## Limitations
 

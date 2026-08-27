@@ -1,8 +1,15 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.dependencies import Embeddings, ImageRetrieval, Posts, ProcessingJobs, Recommendations
+from app.api.dependencies import (
+    Embeddings,
+    ImageRetrieval,
+    Posts,
+    ProcessingJobs,
+    Recommendations,
+    require_development_environment,
+)
 from app.api.routes.jobs import job_response
 from app.schemas.embedding import EmbeddingResponse
 from app.schemas.processing_job import CreateEmbeddingJobRequest, ProcessingJobResponse
@@ -117,6 +124,7 @@ def create_post_embedding(
     "/{post_id}/embedding/debug-sync",
     response_model=EmbeddingResponse,
     deprecated=True,
+    dependencies=[Depends(require_development_environment)],
 )
 def create_post_embedding_debug(
     post_id: UUID, service: Embeddings

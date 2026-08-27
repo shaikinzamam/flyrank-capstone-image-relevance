@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     vision_provider: str = Field(default="gemini", validation_alias="VISION_PROVIDER")
     gemini_api_key: str | None = Field(default=None, validation_alias="GEMINI_API_KEY")
     gemini_vision_model: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.6-flash",
         validation_alias="GEMINI_VISION_MODEL",
     )
     vision_timeout_seconds: PositiveInt = Field(

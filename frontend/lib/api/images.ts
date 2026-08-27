@@ -7,6 +7,17 @@ export async function listImages(): Promise<ImageAsset[]> {
   return response as ImageAsset[];
 }
 
+const DEMO_HERO_IMAGE_FILENAME = "red_fox_01.jpg";
+
+export async function getDemoHeroImage(): Promise<ImageAsset | null> {
+  const images = await listImages();
+  return (
+    images.find(
+      (image) => image.filename.toLowerCase() === DEMO_HERO_IMAGE_FILENAME,
+    ) ?? null
+  );
+}
+
 export function getImageDetails(id: string): Promise<ImageDetail> {
   return apiRequest(`/images/${id}/details`);
 }
