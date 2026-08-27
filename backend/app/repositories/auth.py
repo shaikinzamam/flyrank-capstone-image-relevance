@@ -19,6 +19,24 @@ class AuthRepository:
             )
         )
 
+    def get_credential(self, key_hash: str) -> ApiCredential | None:
+        """Return a credential by its globally unique hash, including revoked rows."""
+        return self._session.scalar(
+            select(ApiCredential).where(ApiCredential.key_hash == key_hash)
+        )
+
+    def get_workspace_credentials_by_name(
+        self, workspace_id: UUID, name: str
+    ) -> list[ApiCredential]:
+        return list(
+            self._session.scalars(
+                select(ApiCredential).where(
+                    ApiCredential.workspace_id == workspace_id,
+                    ApiCredential.name == name,
+                )
+            )
+        )
+
     def get_workspace(self, workspace_id: UUID) -> Workspace | None:
         return self._session.get(Workspace, workspace_id)
 

@@ -1,7 +1,15 @@
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 ).replace(/\/$/, "");
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
+const PLACEHOLDER_MARKERS = [
+  "your_current",
+  "replace-me",
+  "replace_me",
+  "changeme",
+  "change_me",
+  "placeholder",
+  "example",
+];
 
 export class ApiError extends Error {
   constructor(
@@ -17,6 +25,18 @@ export function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`;
 }
 
+function configuredApiKey(): string {
+  const key = (process.env.NEXT_PUBLIC_API_KEY ?? "").trim();
+  const lowered = key.toLowerCase();
+  if (
+    !/^frk_[A-Za-z0-9_-]{32,}$/.test(key) ||
+    PLACEHOLDER_MARKERS.some((marker) => lowered.includes(marker))
+  ) {
+    throw new ApiError("Demo API key is not configured", 0);
+  }
+  return key;
+}
+
 function isErrorPayload(value: unknown): value is { detail: string } {
   return (
     typeof value === "object" &&
@@ -30,13 +50,14 @@ export async function apiRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const apiKey = configuredApiKey();
   let response: Response;
   try {
     response = await fetch(apiUrl(path), {
       ...init,
       headers: {
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
-        ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+        Authorization: `Bearer ${apiKey}`,
         ...init?.headers,
       },
     });
@@ -58,12 +79,13 @@ export async function apiBlobRequest(
   path: string,
   init?: RequestInit,
 ): Promise<Blob> {
+  const apiKey = configuredApiKey();
   let response: Response;
   try {
     response = await fetch(apiUrl(path), {
       ...init,
       headers: {
-        ...(API_KEY ? { Authorization: `Bearer ${API_KEY}` } : {}),
+        Authorization: `Bearer ${apiKey}`,
         ...init?.headers,
       },
     });

@@ -108,7 +108,9 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
-        NEXT_PUBLIC_API_KEY: ${NEXT_PUBLIC_API_KEY:-}
+        # NEXT_PUBLIC_* is embedded by `next build`; use DEMO_API_KEY as the
+        # single source of truth so the browser and seeded credential agree.
+        NEXT_PUBLIC_API_KEY: ${DEMO_API_KEY:?Set DEMO_API_KEY in .env for the local demo}
     environment:
       NODE_ENV: production
     depends_on:

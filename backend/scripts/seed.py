@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import json
 import time
-from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -19,7 +18,7 @@ from app.models.image_metadata import AiCallLog, ImageMetadata
 from app.models.post import Post
 from app.models.processing_job import JobStatus, ProcessingJob
 from app.models.recommendation import HumanReviewDecision
-from app.models.workspace import ApiCredential, Workspace
+from app.models.workspace import Workspace
 from app.providers.corpus import CorpusFixtureEmbeddingProvider, load_corpus_records
 from app.repositories.auth import AuthRepository
 from app.repositories.embeddings import EmbeddingRepository
@@ -31,7 +30,7 @@ from app.repositories.posts import PostRepository
 from app.repositories.processing_jobs import ProcessingJobRepository
 from app.repositories.recommendations import RecommendationRepository
 from app.schemas.post import CreatePostRequest
-from app.services.auth import CredentialService, hash_api_key
+from app.services.auth import CredentialService, validate_demo_api_key
 from app.services.embeddings import EmbeddingService
 from app.services.evaluation import EvaluationService
 from app.services.image_assets import ImageAssetService
@@ -65,8 +64,10 @@ async def _upload(service: ImageAssetService, path: Path) -> ImageAsset:
 
 def _workspace_for_key() -> UUID:
     settings = get_settings()
-    if not settings.demo_api_key:
-        raise RuntimeError("DEMO_API_KEY is required; plaintext credentials are never seeded")
+    try:
+        demo_api_key = validate_demo_api_key(settings.demo_api_key)
+    except ValueError as exc:
+        raise RuntimeError(str(exc)) from exc
     with SessionLocal() as session:
         auth = AuthRepository(session)
         workspace = auth.get_workspace_by_name(WORKSPACE_NAME)
@@ -75,23 +76,9 @@ def _workspace_for_key() -> UUID:
             auth.add(workspace)
             auth.commit()
             auth.refresh(workspace)
-        existing = auth.get_active_credential(hash_api_key(settings.demo_api_key))
-        if existing is None:
-            for prior in session.scalars(
-                select(ApiCredential).where(
-                    ApiCredential.workspace_id == workspace.id,
-                    ApiCredential.name == "local demo credential",
-                    ApiCredential.active.is_(True),
-                )
-            ):
-                prior.active = False
-                prior.revoked_at = datetime.now(UTC)
-            session.commit()
-            CredentialService(auth).create(
-                workspace, name="local demo credential", api_key=settings.demo_api_key
-            )
-        elif existing.workspace_id != workspace.id:
-            raise RuntimeError("DEMO_API_KEY already belongs to another workspace")
+        CredentialService(auth).reconcile_local_demo(
+            workspace, api_key=demo_api_key
+        )
         return workspace.id
 
 

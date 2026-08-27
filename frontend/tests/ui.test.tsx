@@ -17,6 +17,10 @@ const createObjectURL = vi.fn(() => "blob:authenticated-image");
 const revokeObjectURL = vi.fn();
 
 beforeEach(() => {
+  vi.stubEnv(
+    "NEXT_PUBLIC_API_KEY",
+    "frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
+  );
   imageFetch.mockResolvedValue(
     new Response(new Blob(["image-bytes"], { type: "image/png" }), {
       status: 200,
@@ -73,17 +77,57 @@ describe("Phase 11 interface", () => {
   });
 
   it("sends bearer authentication when fetching protected image bytes", async () => {
-    vi.stubEnv("NEXT_PUBLIC_API_KEY", "synthetic-browser-test-key");
+    vi.stubEnv(
+      "NEXT_PUBLIC_API_KEY",
+      "frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
+    );
     vi.resetModules();
     const { fetchImageContent } = await import("@/lib/api/images");
     await fetchImageContent("image-1");
     const [, request] = imageFetch.mock.calls.at(-1) as [string, RequestInit];
     expect(new Headers(request.headers).get("Authorization")).toBe(
-      "Bearer synthetic-browser-test-key",
+      "Bearer frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
     );
     expect(imageFetch.mock.calls.at(-1)?.[0]).toBe(
       "http://localhost:8000/images/image-1/content",
     );
+  });
+
+  it("sends the configured demo key from the JSON API client", async () => {
+    vi.resetModules();
+    const { apiRequest } = await import("@/lib/api/client");
+    await apiRequest("/images");
+
+    const [, request] = imageFetch.mock.calls.at(-1) as [string, RequestInit];
+    expect(new Headers(request.headers).get("Authorization")).toBe(
+      "Bearer frk_browser_test_8Jw3qD6sK9vN2xF5mR7tY4uP1aC0",
+    );
+  });
+
+  it("reports a clear configuration error when the browser key is blank", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_KEY", "");
+    vi.resetModules();
+    const { apiRequest } = await import("@/lib/api/client");
+
+    await expect(apiRequest("/images")).rejects.toMatchObject({
+      message: "Demo API key is not configured",
+      status: 0,
+    });
+    expect(imageFetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a placeholder browser key before making a request", async () => {
+    vi.stubEnv(
+      "NEXT_PUBLIC_API_KEY",
+      "frk_YOUR_CURRENT_DEMO_KEY_12345678901234567890",
+    );
+    vi.resetModules();
+    const { apiRequest } = await import("@/lib/api/client");
+
+    await expect(apiRequest("/images")).rejects.toThrow(
+      "Demo API key is not configured",
+    );
+    expect(imageFetch).not.toHaveBeenCalled();
   });
 
   it("shows accessible fallback alt text when protected image fetching fails", async () => {
